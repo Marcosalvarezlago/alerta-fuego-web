@@ -7,14 +7,11 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   :root{
-    --rojo:#dc2626;
+    --rojo:#dc2626; --rojo-suave:#fee2e2;
     --azul:#2563eb;
-    --ambar:#f59e0b;
-    --verde:#10b981;
-    --tinta:#0f172a;
-    --gris:#64748b;
-    --borde:#e2e8f0;
-    --fondo:#f8fafc;
+    --ambar:#f59e0b; --ambar-suave:#fef3c7;
+    --verde:#10b981; --verde-suave:#d1fae5;
+    --tinta:#0f172a; --gris:#64748b; --borde:#e2e8f0; --fondo:#f8fafc;
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
@@ -24,13 +21,11 @@
   }
   #app{display:flex;flex-direction:column;height:100%}
 
-  /* Cabecera compacta: la app es el mapa, no la portada */
   header{
-    background:#111827;color:#fff;
-    padding:10px 14px;
+    background:#111827;color:#fff;padding:10px 14px;
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   }
-  header h1{font-size:1.05rem;margin:0;font-weight:800;letter-spacing:.01em}
+  header h1{font-size:1.05rem;margin:0;font-weight:800}
   header .tag{
     font-size:.68rem;letter-spacing:.09em;text-transform:uppercase;
     background:#7f1d1d;padding:3px 9px;border-radius:999px;font-weight:700;
@@ -38,42 +33,28 @@
   header .aviso{font-size:.78rem;opacity:.9;margin-left:auto}
   header .aviso strong{color:#fed7aa}
 
-  /* Barra de control de puntos */
   #controles{
     background:#fff;border-bottom:1px solid var(--borde);
-    padding:8px 10px;
-    display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;
+    padding:8px 10px;display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;
   }
   .chip{
-    flex:1 1 160px;min-width:160px;
-    border:2px solid var(--borde);border-radius:12px;
-    padding:7px 11px;cursor:pointer;background:#fff;text-align:left;
-    font:inherit;transition:border-color .15s, background .15s;
+    flex:1 1 160px;min-width:160px;border:2px solid var(--borde);border-radius:12px;
+    padding:7px 11px;cursor:pointer;background:#fff;text-align:left;font:inherit;
+    transition:border-color .15s, background .15s;
   }
-  .chip .titulo{
-    display:block;font-size:.72rem;font-weight:800;
-    text-transform:uppercase;letter-spacing:.05em;
-  }
-  .chip .coords{
-    display:block;font-size:.84rem;color:var(--gris);margin-top:2px;
-    font-variant-numeric:tabular-nums;
-  }
+  .chip .titulo{display:block;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+  .chip .coords{display:block;font-size:.84rem;color:var(--gris);margin-top:2px;font-variant-numeric:tabular-nums}
   .chip.fuego .titulo{color:var(--rojo)}
   .chip.zona .titulo{color:var(--azul)}
   .chip.activo{border-style:dashed}
   .chip.fuego.activo{border-color:var(--rojo);background:#fef2f2}
   .chip.zona.activo{border-color:var(--azul);background:#eff6ff}
-  #btn-borrar{
-    border:1px solid var(--borde);background:#fff;border-radius:12px;
-    padding:0 14px;cursor:pointer;font:inherit;font-size:.85rem;color:var(--tinta);
-  }
+  #btn-borrar{border:1px solid var(--borde);background:#fff;border-radius:12px;padding:0 14px;cursor:pointer;font:inherit;font-size:.85rem}
   #btn-borrar:hover{background:var(--fondo)}
   #hint{font-size:.8rem;color:var(--gris);width:100%;margin-top:2px}
 
-  /* El mapa ocupa todo el resto de la pantalla */
-  #map{flex:1;min-height:300px}
+  #map{flex:1;min-height:260px}
 
-  /* Marcadores propios */
   .marcador{
     display:flex;align-items:center;justify-content:center;
     width:34px;height:34px;border-radius:50%;font-size:17px;
@@ -82,8 +63,63 @@
   .marcador.fuego{background:var(--rojo)}
   .marcador.zona{background:var(--azul)}
 
+  /* ------- Panel inferior: datos, cálculo y resultado ------- */
+  #panel{background:#fff;border-top:1px solid var(--borde);box-shadow:0 -6px 18px rgba(15,23,42,.06)}
+  #barra{display:flex;gap:8px;align-items:center;padding:8px 10px;flex-wrap:wrap}
+  #hint-calc{font-size:.82rem;color:var(--gris);flex:1 1 220px;min-width:180px}
+  #resumen{
+    display:none;align-items:center;gap:8px;flex:1 1 260px;min-width:220px;
+    border-radius:12px;padding:8px 12px;cursor:pointer;border:1px solid var(--borde);
+    font-size:.9rem;font-weight:700;background:var(--fondo);text-align:left;font-family:inherit;
+  }
+  #resumen .dot{width:12px;height:12px;border-radius:999px;flex:0 0 auto}
+  #resumen.riesgo{background:var(--rojo-suave);border-color:#fecaca;color:#7f1d1d}
+  #resumen.riesgo .dot{background:var(--rojo)}
+  #resumen.alerta{background:var(--ambar-suave);border-color:#fde68a;color:#78350f}
+  #resumen.alerta .dot{background:var(--ambar)}
+  #resumen.seguro{background:var(--verde-suave);border-color:#a7f3d0;color:#064e3b}
+  #resumen.seguro .dot{background:var(--verde)}
+  .btn{border:1px solid var(--borde);background:#fff;border-radius:12px;padding:9px 14px;cursor:pointer;font:inherit;font-size:.88rem}
+  .btn:hover{background:var(--fondo)}
+  .btn.primario{background:var(--rojo);border-color:var(--rojo);color:#fff;font-weight:800}
+  .btn.primario:hover{background:#b91c1c}
+  .btn.primario:disabled{background:#e2e8f0;border-color:#e2e8f0;color:#94a3b8;cursor:not-allowed}
+
+  #inputs{display:none;border-top:1px dashed var(--borde);padding:10px 12px}
+  #inputs.abierto{display:block}
+  .grid-datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px}
+  .campo label{display:block;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--gris);margin-bottom:4px}
+  .campo select{width:100%;padding:8px;border:1px solid var(--borde);border-radius:10px;font:inherit;background:#fff}
+  .campo .fila-rango{display:flex;align-items:center;gap:10px}
+  .campo input[type=range]{flex:1;accent-color:var(--rojo)}
+  .campo output{min-width:66px;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+
+  #resultado{display:none;border-top:1px solid var(--borde);padding:12px;max-height:48vh;overflow-y:auto}
+  #resultado.abierto{display:block}
+  .estado{border-radius:16px;padding:14px 16px;border:1px solid;margin-bottom:10px}
+  .estado .etiqueta{font-size:.72rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}
+  .estado .titulo{font-size:1.35rem;font-weight:900;line-height:1.15;margin-bottom:4px}
+  .estado .desc{font-size:.92rem;line-height:1.45}
+  .estado.riesgo{background:var(--rojo-suave);border-color:#fecaca;color:#7f1d1d}
+  .estado.alerta{background:var(--ambar-suave);border-color:#fde68a;color:#78350f}
+  .estado.seguro{background:var(--verde-suave);border-color:#a7f3d0;color:#064e3b}
+  .metricas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px}
+  .metrica{border:1px solid var(--borde);border-radius:14px;padding:10px 12px;background:#fff}
+  .metrica .l{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--gris)}
+  .metrica .v{font-size:1.28rem;font-weight:900;margin:2px 0}
+  .metrica .s{font-size:.78rem;color:var(--gris);line-height:1.3}
+  .datos-usados{font-size:.84rem;color:#334155;background:var(--fondo);border:1px solid var(--borde);border-radius:12px;padding:9px 12px;margin-bottom:10px}
+  details.bloque{border:1px solid var(--borde);border-radius:12px;padding:9px 12px;margin-bottom:10px;background:#fff}
+  details.bloque summary{cursor:pointer;font-weight:800;font-size:.9rem}
+  details.bloque ul{margin:8px 0 2px;padding-left:20px}
+  details.bloque li{font-size:.88rem;line-height:1.45;margin-bottom:5px}
+  details.bloque .tec{font-size:.84rem;color:#334155;line-height:1.6;margin-top:8px}
+  .recordatorio{border-radius:12px;padding:11px 13px;background:#111827;color:#f8fafc;font-size:.84rem;line-height:1.45}
+  .recordatorio strong{color:#fed7aa}
+
   @media (max-width:480px){
     header .aviso{margin-left:0;width:100%}
+    #resultado{max-height:52vh}
   }
 </style>
 </head>
@@ -111,46 +147,360 @@
 
   <div id="map"></div>
 
+  <div id="panel">
+    <div id="barra">
+      <button id="resumen" type="button" title="Ver / ocultar el detalle del resultado">
+        <span class="dot"></span><span id="resumen-texto"></span>
+      </button>
+      <span id="hint-calc"></span>
+      <button class="btn" id="btn-datos" type="button">Datos ▾</button>
+      <button class="btn primario" id="btn-calcular" type="button">Calcular alerta</button>
+    </div>
+
+    <div id="inputs">
+      <div class="grid-datos">
+        <div class="campo">
+          <label for="in-dir">Viento: dirección hacia la que empuja</label>
+          <select id="in-dir">
+            <option value="N">Hacia el norte ↑</option>
+            <option value="NE" selected>Hacia el nordeste ↗</option>
+            <option value="E">Hacia el este →</option>
+            <option value="SE">Hacia el sudeste ↘</option>
+            <option value="S">Hacia el sur ↓</option>
+            <option value="SO">Hacia el suroeste ↙</option>
+            <option value="O">Hacia el oeste ←</option>
+            <option value="NO">Hacia el noroeste ↖</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="in-vel">Velocidad del viento</label>
+          <div class="fila-rango">
+            <input type="range" id="in-vel" min="0" max="80" step="1" value="20">
+            <output id="out-vel">20 km/h</output>
+          </div>
+        </div>
+        <div class="campo">
+          <label for="in-comb">Combustible dominante</label>
+          <select id="in-comb">
+            <option value="pastos_bajos">Pastos bajos</option>
+            <option value="quercus">Bosque de Quercus / encinar / robledal</option>
+            <option value="matorral_mediterraneo" selected>Matorral mediterráneo</option>
+            <option value="pinar">Pinar</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="in-pen">Pendiente aproximada</label>
+          <div class="fila-rango">
+            <input type="range" id="in-pen" min="0" max="100" step="1" value="30">
+            <output id="out-pen">30 %</output>
+          </div>
+        </div>
+        <div class="campo">
+          <label for="in-sentido">El fuego avanza por la ladera</label>
+          <select id="in-sentido">
+            <option value="subiendo" selected>Subiendo</option>
+            <option value="llano">En llano</option>
+            <option value="bajando">Bajando</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="resultado"></div>
+  </div>
+
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 "use strict";
+// === MODELO ALERTA FUEGO (portado 1:1 desde src/modelo.py) ===
+// VPIF = V0 · FV · FP ; Tiempo = distancia / VPIF
+// No modificar valores sin aviso explícito: modelo documental del grupo.
 
-// ---------------------------------------------------------------------------
-// Estado
-// ---------------------------------------------------------------------------
+const DIRECCIONES_GRADOS = {
+  N: 0, NE: 45, E: 90, SE: 135, S: 180, SO: 225, O: 270, NO: 315
+};
+
+const V0_COMBUSTIBLE = {
+  pastos_bajos: 3,
+  quercus: 4,
+  matorral_mediterraneo: 6,
+  pinar: 8
+};
+
+function calcularDistanciaM(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = (g) => g * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function calcularRumboGrados(lat1, lon1, lat2, lon2) {
+  const toRad = (g) => g * Math.PI / 180;
+  const y = Math.sin(toRad(lon2 - lon1)) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
+  const rumbo = Math.atan2(y, x) * 180 / Math.PI;
+  return (rumbo + 360) % 360;
+}
+
+function diferenciaAngularFirmada(a, b) {
+  // Diferencia b−a normalizada a [−180, 180]
+  let d = (b - a) % 360;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+}
+
+function clasificarCuadrante(direccionVientoGrados, rumboFuegoZonaGrados) {
+  const d = diferenciaAngularFirmada(direccionVientoGrados, rumboFuegoZonaGrados);
+  const abs = Math.abs(d);
+  if (abs <= 45) return { cuadrante: "riesgo", diferencia: d };
+  if (abs <= 135) {
+    return { cuadrante: d > 0 ? "alerta_derecha" : "alerta_izquierda", diferencia: d };
+  }
+  return { cuadrante: "sin_riesgo", diferencia: d };
+}
+
+function obtenerFactorViento(vKmh) {
+  if (vKmh < 10) return 1;
+  if (vKmh < 20) return 1.5;
+  if (vKmh < 30) return 2;
+  return 3;
+}
+
+function obtenerFactorPendiente(pendientePct, sentidoLadera) {
+  if (sentidoLadera === "bajando") return 0.7;
+  if (sentidoLadera === "llano") return 1;
+  if (pendientePct < 20) return 1;
+  if (pendientePct <= 40) return 1.5;
+  return 2;
+}
+
+function formatearTiempo(tiempoMin) {
+  if (tiempoMin === null || !isFinite(tiempoMin)) return "indeterminado";
+  const horas = Math.floor(tiempoMin / 60);
+  const minutos = Math.round(tiempoMin % 60);
+  if (horas === 0) return `${minutos} min`;
+  return `${horas} h ${minutos} min`;
+}
+
+function clasificarEscenario(tiempoMin) {
+  if (tiempoMin === null || !isFinite(tiempoMin)) return "indeterminado";
+  if (tiempoMin <= 30) return "30_min";
+  if (tiempoMin <= 60) return "1_hora";
+  if (tiempoMin <= 90) return "1_hora_y_media";
+  return "vigilancia_preventiva";
+}
+
+function evaluarAlertaFuego(p) {
+  const distanciaM = calcularDistanciaM(p.latFuego, p.lonFuego, p.latZona, p.lonZona);
+  const rumbo = calcularRumboGrados(p.latFuego, p.lonFuego, p.latZona, p.lonZona);
+  const dirViento = DIRECCIONES_GRADOS[p.direccionVientoHacia];
+  const cls = clasificarCuadrante(dirViento, rumbo);
+
+  const v0 = V0_COMBUSTIBLE[p.tipoCombustible];
+  const fv = obtenerFactorViento(p.velocidadVientoKmh);
+  const fp = obtenerFactorPendiente(p.pendientePct, p.sentidoLadera);
+  const vpif = v0 * fv * fp;
+
+  const tiempoMin = vpif > 0 ? distanciaM / vpif : null;
+
+  return {
+    distanciaM,
+    rumboFuegoZona: rumbo,
+    direccionVientoGrados: dirViento,
+    diferenciaFirmada: cls.diferencia,
+    cuadrante: cls.cuadrante,
+    v0, fv, fp, vpif,
+    tiempoMin,
+    tiempoTexto: formatearTiempo(tiempoMin),
+    escenario: clasificarEscenario(tiempoMin)
+  };
+}
+// === FIN MODELO ===
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    DIRECCIONES_GRADOS, V0_COMBUSTIBLE,
+    calcularDistanciaM, calcularRumboGrados, diferenciaAngularFirmada,
+    clasificarCuadrante, obtenerFactorViento, obtenerFactorPendiente,
+    formatearTiempo, clasificarEscenario, evaluarAlertaFuego
+  };
+}
+// === GEOMETRÍA DE CUADRANTES ===
+
+function puntoDesdeOrigen(lat, lon, rumboGrados, distanciaM) {
+  const R = 6371000;
+  const toRad = (g) => g * Math.PI / 180;
+  const toDeg = (r) => r * 180 / Math.PI;
+  const br = toRad(rumboGrados);
+  const la1 = toRad(lat);
+  const lo1 = toRad(lon);
+  const dR = distanciaM / R;
+
+  const la2 = Math.asin(
+    Math.sin(la1) * Math.cos(dR) +
+    Math.cos(la1) * Math.sin(dR) * Math.cos(br)
+  );
+  const lo2 = lo1 + Math.atan2(
+    Math.sin(br) * Math.sin(dR) * Math.cos(la1),
+    Math.cos(dR) - Math.sin(la1) * Math.sin(la2)
+  );
+  return [toDeg(la2), toDeg(lo2)];
+}
+
+function crearSectorLatLng(lat, lon, direccionCentral, aperturaGrados, radioM, pasos = 28) {
+  const ini = direccionCentral - aperturaGrados / 2;
+  const fin = direccionCentral + aperturaGrados / 2;
+  const puntos = [[lat, lon]];
+  for (let i = 0; i <= pasos; i++) {
+    const ang = ini + (fin - ini) * i / pasos;
+    puntos.push(puntoDesdeOrigen(lat, lon, ang, radioM));
+  }
+  puntos.push([lat, lon]);
+  return puntos;
+}
+// === FIN GEOMETRÍA ===
+
+if (typeof module !== "undefined") {
+  module.exports = { puntoDesdeOrigen, crearSectorLatLng };
+}
+// === TEXTOS DEL PROTOCOLO (documento Alerta Fuego) ===
+
+const PROTOCOLOS = {
+  "30_min": {
+    encabezado: "🚨 Prioridad inmediata",
+    titulo: "SI EL INCENDIO TE ALCANZA EN 30 MINUTOS",
+    acciones: [
+      "Mantén la calma y sigue las indicaciones de emergencias: 112, INFOEX o Protección Civil.",
+      "Prepara documentación esencial: DNI, escrituras, seguros, tarjetas sanitarias, cartillas de animales, llaves y copias.",
+      "Prepara medicación diaria si la necesitas.",
+      "Prepara un kit básico: agua, linterna, botiquín, radio, teléfono, cargador, ropa de muda y ropa de algodón.",
+      "Protege vías respiratorias y ojos frente al humo.",
+      "Cierra llaves de gas y electricidad.",
+      "Cierra puertas y ventanas.",
+      "Retira cortinas y materiales combustibles visibles.",
+      "Guarda mobiliario de jardín, toldos o elementos similares.",
+      "Activa sistemas pasivos de defensa solo si no supone riesgo.",
+      "Asegura animales y prepara su evacuación si es posible.",
+      "Sal inmediatamente cuando lo indiquen las autoridades.",
+      "Usa rutas seguras y evita caminos estrechos rodeados de vegetación.",
+      "No regreses hasta autorización oficial."
+    ]
+  },
+  "1_hora": {
+    encabezado: "⚠️ Preparación urgente",
+    titulo: "SI EL INCENDIO TE ALCANZA EN 1 HORA",
+    acciones: [
+      "Todavía hay poco tiempo, pero permite preparar mejor la situación.",
+      "Retira objetos inflamables: mobiliario de jardín, sillas, toldos, cortinas, leña, pinturas, barnices o combustibles.",
+      "Revisa almacenes, maquinaria, infraestructuras ganaderas y vivienda.",
+      "Activa sistemas pasivos de defensa o moja el entorno inmediato si es seguro.",
+      "Retira biomasa forestal cercana si puede hacerse sin riesgo y en poco tiempo.",
+      "Cierra depósitos de gas o combustibles.",
+      "Comprueba por canales oficiales si se prevé evacuación o confinamiento.",
+      "Deja libres los accesos para vehículos de emergencia.",
+      "Avisa a familiares o vecinos vulnerables para que estén preparados.",
+      "Prepárate para evacuar o confinar siguiendo indicaciones oficiales."
+    ]
+  },
+  "1_hora_y_media": {
+    encabezado: "🟠 Preparación preventiva",
+    titulo: "SI EL INCENDIO TE ALCANZA EN 1 HORA Y MEDIA",
+    acciones: [
+      "Aplica todo lo recomendado anteriormente si procede.",
+      "Identifica la ruta de evacuación recomendada y un punto de encuentro seguro.",
+      "Revisa que todas las personas del hogar saben qué hacer y a dónde dirigirse.",
+      "Cierra depósitos de gas o combustibles.",
+      "Mantente informado por fuentes oficiales.",
+      "Prepara animales domésticos para un posible traslado.",
+      "Asegura que el vehículo tiene combustible suficiente.",
+      "Guarda documentos u objetos importantes en un lugar fácil de llevar.",
+      "Retira muebles de exterior, cortinas o elementos que puedan favorecer la entrada de brasas, siempre que no suponga riesgo.",
+      "Comprueba que personas dependientes o con movilidad reducida tienen apoyo garantizado.",
+      "Evita rumores y sigue solo fuentes oficiales."
+    ]
+  },
+  "vigilancia_preventiva": {
+    encabezado: "🟢 Vigilancia y seguimiento",
+    titulo: "VIGILANCIA PREVENTIVA",
+    acciones: [
+      "Mantén vigilancia activa de la evolución del incendio.",
+      "Revisa cambios de viento, pendiente y dirección del frente.",
+      "Ten preparado un plan de evacuación de la finca.",
+      "Prepara documentación, medicación, animales y vías de salida.",
+      "Consulta solo fuentes oficiales.",
+      "No uses esta estimación para apurar los tiempos."
+    ]
+  },
+  "indeterminado": {
+    encabezado: "🟢 Vigilancia y seguimiento",
+    titulo: "ESCENARIO INDETERMINADO",
+    acciones: [
+      "No se puede estimar el tiempo de llegada con los datos actuales.",
+      "Consulta fuentes oficiales.",
+      "Llama al 112 si existe peligro inmediato."
+    ]
+  }
+};
+
+const TEXTO_CUADRANTE = {
+  riesgo: {
+    clase: "riesgo",
+    etiqueta: "Exposición principal",
+    titulo: "Cuadrante de riesgo",
+    desc: "La zona vulnerable está en el cuadrante hacia el que empuja el viento. Es la exposición principal según el modelo."
+  },
+  alerta_derecha: {
+    clase: "alerta",
+    etiqueta: "Exposición lateral",
+    titulo: "Cuadrante de alerta",
+    desc: "La zona vulnerable está en un cuadrante lateral. Un cambio de viento podría dirigir el frente hacia ella: mantén vigilancia."
+  },
+  alerta_izquierda: {
+    clase: "alerta",
+    etiqueta: "Exposición lateral",
+    titulo: "Cuadrante de alerta",
+    desc: "La zona vulnerable está en un cuadrante lateral. Un cambio de viento podría dirigir el frente hacia ella: mantén vigilancia."
+  },
+  sin_riesgo: {
+    clase: "seguro",
+    etiqueta: "Exposición baja según viento actual",
+    titulo: "Sin riesgo directo",
+    desc: "Con la dirección de viento actual, la zona vulnerable no está en la trayectoria principal del frente. El viento puede cambiar: mantén vigilancia."
+  }
+};
+
+// === ESTADO ===
 
 const CENTRO_TRABAJO = [40.1290, -5.4610];
 
 const estado = {
-  fuego: null,     // {lat, lon} o null
-  zona: null,      // {lat, lon} o null
-  objetivo: "fuego" // qué punto fija el próximo toque en el mapa
+  fuego: null,
+  zona: null,
+  objetivo: "fuego",
+  resultado: null
 };
 
-// ---------------------------------------------------------------------------
-// Mapa
-// ---------------------------------------------------------------------------
+// === MAPA ===
 
 const map = L.map("map").setView(CENTRO_TRABAJO, 13);
 
 const capaOSM = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19,
-  attribution: "© OpenStreetMap"
+  maxZoom: 19, attribution: "© OpenStreetMap"
 });
 const capaSat = L.tileLayer(
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-  maxZoom: 19,
-  attribution: "Tiles © Esri — Maxar, Earthstar Geographics"
-});
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  { maxZoom: 19, attribution: "Tiles © Esri — Maxar, Earthstar Geographics" }
+);
 capaOSM.addTo(map);
 L.control.layers({ "Mapa": capaOSM, "Satélite": capaSat }, null, { position: "topright" }).addTo(map);
 L.control.scale({ imperial: false }).addTo(map);
-
-// ---------------------------------------------------------------------------
-// Marcadores y línea
-// ---------------------------------------------------------------------------
 
 function icono(tipo) {
   const emoji = tipo === "fuego" ? "🔥" : "🏠";
@@ -164,6 +514,7 @@ function icono(tipo) {
 
 const marcadores = { fuego: null, zona: null };
 let linea = null;
+let capasCalculo = [];   // sectores + flecha de viento
 
 function fijarPunto(tipo, latlng) {
   estado[tipo] = { lat: +latlng.lat.toFixed(6), lon: +latlng.lng.toFixed(6) };
@@ -173,23 +524,175 @@ function fijarPunto(tipo, latlng) {
     marcadores[tipo].on("drag dragend", (e) => {
       const p = e.target.getLatLng();
       estado[tipo] = { lat: +p.lat.toFixed(6), lon: +p.lng.toFixed(6) };
+      invalidarResultado();
       refrescar();
     });
   } else {
     marcadores[tipo].setLatLng(latlng);
   }
 
-  // Avance guiado: tras fijar el incendio, el siguiente toque va a la zona.
   if (tipo === "fuego" && !estado.zona) estado.objetivo = "zona";
 
+  invalidarResultado();
   refrescar();
 }
 
 map.on("click", (e) => fijarPunto(estado.objetivo, e.latlng));
 
-// ---------------------------------------------------------------------------
-// Interfaz
-// ---------------------------------------------------------------------------
+// === CÁLCULO Y CAPAS DE RESULTADO ===
+
+function limpiarCapasCalculo() {
+  for (const c of capasCalculo) map.removeLayer(c);
+  capasCalculo = [];
+}
+
+function invalidarResultado() {
+  if (estado.resultado === null) return;
+  estado.resultado = null;
+  limpiarCapasCalculo();
+  document.getElementById("resultado").classList.remove("abierto");
+  document.getElementById("resumen").style.display = "none";
+}
+
+function dibujarCuadrantes(r) {
+  limpiarCapasCalculo();
+  const f = estado.fuego;
+  const dir = r.direccionVientoGrados;
+  // Radio visual proporcional a la distancia: sin decisiones extra para el usuario.
+  const radio = Math.min(12000, Math.max(900, r.distanciaM * 1.15));
+
+  const sectores = [
+    ["Cuadrante de riesgo", dir, "#dc2626", 0.28],
+    ["Cuadrante de alerta", dir + 90, "#f59e0b", 0.24],
+    ["Cuadrante de alerta", dir - 90, "#f59e0b", 0.24],
+    ["Cuadrante sin riesgo directo", dir + 180, "#10b981", 0.20]
+  ];
+  for (const [nombre, d, color, op] of sectores) {
+    const pol = L.polygon(crearSectorLatLng(f.lat, f.lon, d, 90, radio), {
+      color, weight: 2, fillColor: color, fillOpacity: op
+    }).bindTooltip(nombre).addTo(map);
+    capasCalculo.push(pol);
+  }
+
+  const fin = puntoDesdeOrigen(f.lat, f.lon, dir, radio);
+  const flecha = L.polyline([[f.lat, f.lon], fin], { color: "#dc2626", weight: 5 })
+    .bindTooltip("Dirección del viento").addTo(map);
+  capasCalculo.push(flecha);
+}
+
+function leerEntradas() {
+  return {
+    direccionVientoHacia: document.getElementById("in-dir").value,
+    velocidadVientoKmh: +document.getElementById("in-vel").value,
+    tipoCombustible: document.getElementById("in-comb").value,
+    pendientePct: +document.getElementById("in-pen").value,
+    sentidoLadera: document.getElementById("in-sentido").value
+  };
+}
+
+function calcular() {
+  const ent = leerEntradas();
+  const r = evaluarAlertaFuego({
+    latFuego: estado.fuego.lat, lonFuego: estado.fuego.lon,
+    latZona: estado.zona.lat, lonZona: estado.zona.lon,
+    ...ent
+  });
+  estado.resultado = { ...r, entradas: ent };
+  dibujarCuadrantes(r);
+  pintarResultado();
+  document.getElementById("inputs").classList.remove("abierto");
+  document.getElementById("resultado").classList.add("abierto");
+  refrescar();
+}
+
+// === PINTADO DEL RESULTADO ===
+
+const NOMBRE_COMBUSTIBLE = {
+  pastos_bajos: "Pastos bajos",
+  quercus: "Bosque de Quercus / encinar / robledal",
+  matorral_mediterraneo: "Matorral mediterráneo",
+  pinar: "Pinar"
+};
+
+function formatearMetros(m) {
+  return m >= 1000 ? (m / 1000).toFixed(2) + " km" : Math.round(m) + " m";
+}
+
+function pintarResultado() {
+  const r = estado.resultado;
+  const t = TEXTO_CUADRANTE[r.cuadrante];
+  const ent = r.entradas;
+
+  // Protocolo: en "sin riesgo directo" se muestra vigilancia preventiva,
+  // no el protocolo de tiempos, para no alarmar fuera de la trayectoria principal.
+  const escenarioProtocolo = r.cuadrante === "sin_riesgo" ? "vigilancia_preventiva" : r.escenario;
+  const p = PROTOCOLOS[escenarioProtocolo];
+
+  let tiempoV, tiempoS;
+  if (r.cuadrante === "riesgo") {
+    tiempoV = r.tiempoTexto;
+    tiempoS = "Estimación principal: la zona está en el cuadrante de riesgo. Úsala para retirarte antes, no para apurar.";
+  } else if (r.cuadrante === "sin_riesgo") {
+    tiempoV = "No prioritario";
+    tiempoS = "No se muestra como alerta principal con la dirección actual del viento.";
+  } else {
+    tiempoV = r.tiempoTexto;
+    tiempoS = "Referencia prudencial por si el frente deriva lateralmente.";
+  }
+
+  const acciones = p.acciones.map((a) => `<li>${a}</li>`).join("");
+
+  document.getElementById("resultado").innerHTML = `
+    <div class="estado ${t.clase}">
+      <div class="etiqueta">${t.etiqueta}</div>
+      <div class="titulo">${t.titulo}</div>
+      <div class="desc">${t.desc}</div>
+    </div>
+
+    <div class="metricas">
+      <div class="metrica"><div class="l">Distancia</div><div class="v">${formatearMetros(r.distanciaM)}</div><div class="s">Entre incendio y zona vulnerable.</div></div>
+      <div class="metrica"><div class="l">Tiempo estimado</div><div class="v">${tiempoV}</div><div class="s">${tiempoS}</div></div>
+      <div class="metrica"><div class="l">VPIF</div><div class="v">${r.vpif.toFixed(1)} m/min</div><div class="s">V0 · FV · FP = ${r.v0} · ${r.fv} · ${r.fp}</div></div>
+    </div>
+
+    <div class="datos-usados">
+      <b>Datos usados (manuales):</b> viento ${ent.velocidadVientoKmh} km/h hacia ${ent.direccionVientoHacia} ·
+      ${NOMBRE_COMBUSTIBLE[ent.tipoCombustible]} · pendiente ${ent.pendientePct} % (${ent.sentidoLadera}).
+    </div>
+
+    <details class="bloque" open>
+      <summary>${p.encabezado}: ${p.titulo}</summary>
+      <ul>${acciones}</ul>
+    </details>
+
+    <details class="bloque">
+      <summary>Detalles técnicos del cálculo</summary>
+      <div class="tec">
+        Rumbo incendio → zona: ${r.rumboFuegoZona.toFixed(1)}° ·
+        Dirección del viento: ${r.direccionVientoGrados}° ·
+        Diferencia angular: ${r.diferenciaFirmada.toFixed(1)}°<br>
+        Cuadrante: ${r.cuadrante} · Escenario por tiempo: ${r.escenario}<br>
+        VPIF = ${r.v0} · ${r.fv} · ${r.fp} = ${r.vpif.toFixed(2)} m/min ·
+        Tiempo = ${Math.round(r.distanciaM)} m / ${r.vpif.toFixed(2)} = ${r.tiempoMin.toFixed(1)} min
+      </div>
+    </details>
+
+    <div class="recordatorio">
+      <strong>Recordatorio:</strong> estimación grosera y orientativa, no un modelo profesional.
+      Úsala para anticiparte, retirarte antes y preparar decisiones prudentes; nunca para apurar
+      tiempos ni justificar entrar o permanecer en zonas comprometidas. Ante peligro: <strong>112</strong>.
+    </div>
+  `;
+
+  const resumen = document.getElementById("resumen");
+  resumen.className = t.clase;
+  resumen.style.display = "flex";
+  const tiempoResumen = r.cuadrante === "sin_riesgo" ? "vigilancia" : r.tiempoTexto;
+  document.getElementById("resumen-texto").textContent =
+    `${t.titulo} · ${tiempoResumen} · ${formatearMetros(r.distanciaM)}`;
+}
+
+// === INTERFAZ GENERAL ===
 
 function refrescar() {
   const f = estado.fuego, z = estado.zona;
@@ -210,6 +713,17 @@ function refrescar() {
   if (f && z) {
     linea = L.polyline([[f.lat, f.lon], [z.lat, z.lon]], { color: "#eab308", weight: 5 }).addTo(map);
   }
+
+  const listo = Boolean(f && z);
+  document.getElementById("btn-calcular").disabled = !listo;
+  const hintCalc = document.getElementById("hint-calc");
+  if (!listo) {
+    hintCalc.textContent = "Fija el incendio y la zona vulnerable en el mapa para poder calcular.";
+  } else if (estado.resultado === null) {
+    hintCalc.textContent = "Puntos listos. Revisa los datos si lo necesitas y pulsa Calcular alerta.";
+  } else {
+    hintCalc.textContent = "";
+  }
 }
 
 document.getElementById("chip-fuego").addEventListener("click", () => {
@@ -224,7 +738,29 @@ document.getElementById("btn-borrar").addEventListener("click", () => {
     estado[t] = null;
   }
   estado.objetivo = "fuego";
+  invalidarResultado();
   refrescar();
+});
+
+document.getElementById("btn-datos").addEventListener("click", () => {
+  document.getElementById("inputs").classList.toggle("abierto");
+});
+document.getElementById("btn-calcular").addEventListener("click", calcular);
+document.getElementById("resumen").addEventListener("click", () => {
+  document.getElementById("resultado").classList.toggle("abierto");
+});
+
+// Cualquier cambio de datos invalida el resultado anterior.
+for (const id of ["in-dir", "in-vel", "in-comb", "in-pen", "in-sentido"]) {
+  document.getElementById(id).addEventListener("input", () => {
+    invalidarResultado(); refrescar();
+  });
+}
+document.getElementById("in-vel").addEventListener("input", (e) => {
+  document.getElementById("out-vel").textContent = e.target.value + " km/h";
+});
+document.getElementById("in-pen").addEventListener("input", (e) => {
+  document.getElementById("out-pen").textContent = e.target.value + " %";
 });
 
 refrescar();

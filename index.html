@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alerta Fuego — demo experimental</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --rojo:#dc2626;
+    --azul:#2563eb;
+    --ambar:#f59e0b;
+    --verde:#10b981;
+    --tinta:#0f172a;
+    --gris:#64748b;
+    --borde:#e2e8f0;
+    --fondo:#f8fafc;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    color:var(--tinta);background:var(--fondo);
+  }
+  #app{display:flex;flex-direction:column;height:100%}
+
+  /* Cabecera compacta: la app es el mapa, no la portada */
+  header{
+    background:#111827;color:#fff;
+    padding:10px 14px;
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  }
+  header h1{font-size:1.05rem;margin:0;font-weight:800;letter-spacing:.01em}
+  header .tag{
+    font-size:.68rem;letter-spacing:.09em;text-transform:uppercase;
+    background:#7f1d1d;padding:3px 9px;border-radius:999px;font-weight:700;
+  }
+  header .aviso{font-size:.78rem;opacity:.9;margin-left:auto}
+  header .aviso strong{color:#fed7aa}
+
+  /* Barra de control de puntos */
+  #controles{
+    background:#fff;border-bottom:1px solid var(--borde);
+    padding:8px 10px;
+    display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;
+  }
+  .chip{
+    flex:1 1 160px;min-width:160px;
+    border:2px solid var(--borde);border-radius:12px;
+    padding:7px 11px;cursor:pointer;background:#fff;text-align:left;
+    font:inherit;transition:border-color .15s, background .15s;
+  }
+  .chip .titulo{
+    display:block;font-size:.72rem;font-weight:800;
+    text-transform:uppercase;letter-spacing:.05em;
+  }
+  .chip .coords{
+    display:block;font-size:.84rem;color:var(--gris);margin-top:2px;
+    font-variant-numeric:tabular-nums;
+  }
+  .chip.fuego .titulo{color:var(--rojo)}
+  .chip.zona .titulo{color:var(--azul)}
+  .chip.activo{border-style:dashed}
+  .chip.fuego.activo{border-color:var(--rojo);background:#fef2f2}
+  .chip.zona.activo{border-color:var(--azul);background:#eff6ff}
+  #btn-borrar{
+    border:1px solid var(--borde);background:#fff;border-radius:12px;
+    padding:0 14px;cursor:pointer;font:inherit;font-size:.85rem;color:var(--tinta);
+  }
+  #btn-borrar:hover{background:var(--fondo)}
+  #hint{font-size:.8rem;color:var(--gris);width:100%;margin-top:2px}
+
+  /* El mapa ocupa todo el resto de la pantalla */
+  #map{flex:1;min-height:300px}
+
+  /* Marcadores propios */
+  .marcador{
+    display:flex;align-items:center;justify-content:center;
+    width:34px;height:34px;border-radius:50%;font-size:17px;
+    border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);
+  }
+  .marcador.fuego{background:var(--rojo)}
+  .marcador.zona{background:var(--azul)}
+
+  @media (max-width:480px){
+    header .aviso{margin-left:0;width:100%}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <h1>🔥 Alerta Fuego</h1>
+    <span class="tag">Demo experimental</span>
+    <span class="aviso">No sustituye a emergencias: ante peligro llama al <strong>112</strong>.</span>
+  </header>
+
+  <div id="controles">
+    <button class="chip fuego activo" id="chip-fuego" type="button">
+      <span class="titulo">🔥 Incendio</span>
+      <span class="coords" id="coords-fuego">Sin fijar — toca el mapa</span>
+    </button>
+    <button class="chip zona" id="chip-zona" type="button">
+      <span class="titulo">🏠 Zona vulnerable</span>
+      <span class="coords" id="coords-zona">Sin fijar</span>
+    </button>
+    <button id="btn-borrar" type="button">Borrar puntos</button>
+    <div id="hint"></div>
+  </div>
+
+  <div id="map"></div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+"use strict";
+
+// ---------------------------------------------------------------------------
+// Estado
+// ---------------------------------------------------------------------------
+
+const CENTRO_TRABAJO = [40.1290, -5.4610];
+
+const estado = {
+  fuego: null,     // {lat, lon} o null
+  zona: null,      // {lat, lon} o null
+  objetivo: "fuego" // qué punto fija el próximo toque en el mapa
+};
+
+// ---------------------------------------------------------------------------
+// Mapa
+// ---------------------------------------------------------------------------
+
+const map = L.map("map").setView(CENTRO_TRABAJO, 13);
+
+const capaOSM = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: "© OpenStreetMap"
+});
+const capaSat = L.tileLayer(
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  maxZoom: 19,
+  attribution: "Tiles © Esri — Maxar, Earthstar Geographics"
+});
+capaOSM.addTo(map);
+L.control.layers({ "Mapa": capaOSM, "Satélite": capaSat }, null, { position: "topright" }).addTo(map);
+L.control.scale({ imperial: false }).addTo(map);
+
+// ---------------------------------------------------------------------------
+// Marcadores y línea
+// ---------------------------------------------------------------------------
+
+function icono(tipo) {
+  const emoji = tipo === "fuego" ? "🔥" : "🏠";
+  return L.divIcon({
+    className: "",
+    html: `<div class="marcador ${tipo}">${emoji}</div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17]
+  });
+}
+
+const marcadores = { fuego: null, zona: null };
+let linea = null;
+
+function fijarPunto(tipo, latlng) {
+  estado[tipo] = { lat: +latlng.lat.toFixed(6), lon: +latlng.lng.toFixed(6) };
+
+  if (!marcadores[tipo]) {
+    marcadores[tipo] = L.marker(latlng, { icon: icono(tipo), draggable: true }).addTo(map);
+    marcadores[tipo].on("drag dragend", (e) => {
+      const p = e.target.getLatLng();
+      estado[tipo] = { lat: +p.lat.toFixed(6), lon: +p.lng.toFixed(6) };
+      refrescar();
+    });
+  } else {
+    marcadores[tipo].setLatLng(latlng);
+  }
+
+  // Avance guiado: tras fijar el incendio, el siguiente toque va a la zona.
+  if (tipo === "fuego" && !estado.zona) estado.objetivo = "zona";
+
+  refrescar();
+}
+
+map.on("click", (e) => fijarPunto(estado.objetivo, e.latlng));
+
+// ---------------------------------------------------------------------------
+// Interfaz
+// ---------------------------------------------------------------------------
+
+function refrescar() {
+  const f = estado.fuego, z = estado.zona;
+
+  document.getElementById("coords-fuego").textContent =
+    f ? `${f.lat}, ${f.lon}` : "Sin fijar — toca el mapa";
+  document.getElementById("coords-zona").textContent =
+    z ? `${z.lat}, ${z.lon}` : "Sin fijar";
+
+  document.getElementById("chip-fuego").classList.toggle("activo", estado.objetivo === "fuego");
+  document.getElementById("chip-zona").classList.toggle("activo", estado.objetivo === "zona");
+
+  const nombre = estado.objetivo === "fuego" ? "el <b>incendio</b>" : "la <b>zona vulnerable</b>";
+  document.getElementById("hint").innerHTML =
+    `El próximo toque en el mapa fija ${nombre}. Arrastra los marcadores para ajustar la posición.`;
+
+  if (linea) { map.removeLayer(linea); linea = null; }
+  if (f && z) {
+    linea = L.polyline([[f.lat, f.lon], [z.lat, z.lon]], { color: "#eab308", weight: 5 }).addTo(map);
+  }
+}
+
+document.getElementById("chip-fuego").addEventListener("click", () => {
+  estado.objetivo = "fuego"; refrescar();
+});
+document.getElementById("chip-zona").addEventListener("click", () => {
+  estado.objetivo = "zona"; refrescar();
+});
+document.getElementById("btn-borrar").addEventListener("click", () => {
+  for (const t of ["fuego", "zona"]) {
+    if (marcadores[t]) { map.removeLayer(marcadores[t]); marcadores[t] = null; }
+    estado[t] = null;
+  }
+  estado.objetivo = "fuego";
+  refrescar();
+});
+
+refrescar();
+</script>
+</body>
+</html>

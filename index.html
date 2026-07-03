@@ -681,6 +681,21 @@ const TEXTO_CUADRANTE = {
   }
 };
 
+const NOMBRE_CUADRANTE = {
+  riesgo: "riesgo",
+  alerta_derecha: "alerta (lado derecho)",
+  alerta_izquierda: "alerta (lado izquierdo)",
+  sin_riesgo: "sin riesgo directo"
+};
+
+const NOMBRE_ESCENARIO = {
+  "30_min": "30 minutos",
+  "1_hora": "1 hora",
+  "1_hora_y_media": "1 hora y media",
+  "vigilancia_preventiva": "vigilancia preventiva",
+  "indeterminado": "indeterminado"
+};
+
 const NOMBRE_COMBUSTIBLE = {
   pastos_bajos: "Pastos bajos",
   quercus: "Bosque de Quercus / encinar / robledal",
@@ -863,9 +878,10 @@ function renderVientoAuto() {
     card.innerHTML =
       "<b>" + Math.round(d.velocidadKmh) + " km/h</b>, empujando hacia <b>" + d.haciaCardinal + "</b> " +
       "(" + Math.round(d.haciaGrados) + "° hacia · sopla desde " + Math.round(d.desdeGrados) + "°)." +
-      "<div class='mini-nota'>Dato puntual de <b>Open-Meteo</b> consultado a las <b>" + d.horaConsulta + "</b> en el punto del incendio. " +
-      "Se reutiliza un máximo de " + MINUTOS_CACHE_VIENTO + " minutos: lo que ves es lo que se usa en el cálculo.</div>" +
-      "<button class='btn mini' id='btn-viento-refresh' type='button'>🔄 Actualizar ahora</button>";
+      "<div class='mini-nota'>Dato puntual en el punto del incendio, consultado a las " + d.horaConsulta + ". " +
+      "Se reutiliza un máximo de " + MINUTOS_CACHE_VIENTO + " minutos: lo que ves es lo que se usa en el cálculo. " +
+      "(Fuente: Open-Meteo)</div>" +
+      "<button class='btn mini' id='btn-viento-refresh' type='button'>Actualizar ahora</button>";
     document.getElementById("btn-viento-refresh").addEventListener("click", () => actualizarVientoAuto(true));
   }
 }
@@ -894,7 +910,8 @@ function renderPendienteAuto() {
       "<b>" + Math.round(d.pendientePct) + " %</b>, el fuego avanza <b>" + d.sentidoLadera + "</b>." +
       "<div class='mini-nota'>Elevación incendio " + Math.round(d.elevFuegoM) + " m · zona " +
       Math.round(d.elevZonaM) + " m · desnivel " + signo + Math.round(d.desnivelM) + " m. " +
-      "Estimación provisional con solo los dos puntos extremos (" + d.fuente + ").</div>";
+      "Estimación provisional con solo los dos puntos extremos. " +
+      "(Fuente: Open-Meteo, elevación)</div>";
   }
 }
 
@@ -1142,7 +1159,7 @@ function pintarResultado() {
       '<div class="tec">' +
         "Rumbo incendio → zona: " + r.rumboFuegoZona.toFixed(1) + "° · Dirección del viento: " +
         r.direccionVientoGrados + "° · Diferencia angular: " + r.diferenciaFirmada.toFixed(1) + "°<br>" +
-        "Cuadrante: " + r.cuadrante + " · Escenario por tiempo: " + r.escenario + "<br>" +
+        "Cuadrante: " + NOMBRE_CUADRANTE[r.cuadrante] + " · Escenario por tiempo: " + NOMBRE_ESCENARIO[r.escenario] + "<br>" +
         tecExtra +
         "VPIF = " + r.v0 + " · " + r.fv + " · " + r.fp + " = " + r.vpif.toFixed(2) + " m/min · " +
         "Tiempo = " + Math.round(r.distanciaM) + " m / " + r.vpif.toFixed(2) + " = " + r.tiempoMin.toFixed(1) + " min" +
@@ -1156,7 +1173,7 @@ function pintarResultado() {
   const resumen = document.getElementById("resumen");
   resumen.className = t.clase;
   resumen.style.display = "flex";
-  const tiempoResumen = r.cuadrante === "sin_riesgo" ? "vigilancia" : r.tiempoTexto;
+  const tiempoResumen = r.cuadrante === "sin_riesgo" ? "vigilancia preventiva" : r.tiempoTexto;
   document.getElementById("resumen-texto").textContent =
     t.titulo + " · " + tiempoResumen + " · " + formatearMetros(r.distanciaM);
 }
@@ -1288,7 +1305,7 @@ function refrescar() {
 
   const nombre = estado.objetivo === "fuego" ? "el <b>incendio</b>" : "la <b>zona vulnerable</b>";
   document.getElementById("hint").innerHTML =
-    "El próximo toque en el mapa fija " + nombre + ". Arrastra los marcadores para ajustar; ✎ para escribir coordenadas.";
+    "El próximo toque en el mapa fija " + nombre + ". Arrastra los marcadores para ajustar; ✎ para escribir coordenadas o pegar un enlace.";
 
   if (linea) { map.removeLayer(linea); linea = null; }
   if (f && z) {

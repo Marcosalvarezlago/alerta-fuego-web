@@ -127,6 +127,9 @@
   .campo .fila-rango{display:flex;align-items:center;gap:10px}
   .campo input[type=range]{flex:1;accent-color:var(--rojo)}
   .campo output{min-width:66px;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+  .fila-rango.sin-elegir{opacity:.45}
+  .fila-rango.sin-elegir input[type=range]{accent-color:#94a3b8}
+  .fila-rango.sin-elegir output{font-weight:600;color:var(--gris);font-style:italic}
 
   .toast{
     position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
@@ -213,20 +216,21 @@
         <div class="seccion-datos">
           <div class="cab-seccion">
             <span>Pendiente</span>
-            <label class="sw"><input type="checkbox" id="chk-pen-auto"> Automática (elevación)</label>
+            <label class="sw"><input type="checkbox" id="chk-pen-auto"> Automática</label>
           </div>
           <div id="pen-manual" class="grid-datos">
             <div class="campo">
               <label for="in-pen">Pendiente aproximada</label>
-              <div class="fila-rango">
+              <div class="fila-rango sin-elegir" id="wrap-pen">
                 <input type="range" id="in-pen" min="0" max="100" step="1" value="30">
-                <output id="out-pen">30 %</output>
+                <output id="out-pen">sin elegir</output>
               </div>
             </div>
             <div class="campo">
               <label for="in-sentido">El fuego avanza por la ladera</label>
               <select id="in-sentido">
-                <option value="subiendo" selected>Subiendo</option>
+                <option value="" selected>Selecciona…</option>
+                <option value="subiendo">Subiendo</option>
                 <option value="llano">En llano</option>
                 <option value="bajando">Bajando</option>
               </select>
@@ -238,14 +242,15 @@
         <div class="seccion-datos">
           <div class="cab-seccion">
             <span>Viento</span>
-            <label class="sw"><input type="checkbox" id="chk-viento-auto"> Automático (Open-Meteo)</label>
+            <label class="sw"><input type="checkbox" id="chk-viento-auto"> Automático</label>
           </div>
           <div id="viento-manual" class="grid-datos">
             <div class="campo">
               <label for="in-dir">Dirección hacia la que empuja</label>
               <select id="in-dir">
+                <option value="" selected>Selecciona…</option>
                 <option value="N">Hacia el norte ↑</option>
-                <option value="NE" selected>Hacia el nordeste ↗</option>
+                <option value="NE">Hacia el nordeste ↗</option>
                 <option value="E">Hacia el este →</option>
                 <option value="SE">Hacia el sudeste ↘</option>
                 <option value="S">Hacia el sur ↓</option>
@@ -256,9 +261,9 @@
             </div>
             <div class="campo">
               <label for="in-vel">Velocidad</label>
-              <div class="fila-rango">
+              <div class="fila-rango sin-elegir" id="wrap-vel">
                 <input type="range" id="in-vel" min="0" max="80" step="1" value="20">
-                <output id="out-vel">20 km/h</output>
+                <output id="out-vel">sin elegir</output>
               </div>
             </div>
           </div>
@@ -271,9 +276,10 @@
             <div class="campo">
               <label for="in-comb">Tipo dominante</label>
               <select id="in-comb">
+                <option value="" selected>Selecciona…</option>
                 <option value="pastos_bajos">Pastos bajos</option>
                 <option value="quercus">Bosque de Quercus / encinar / robledal</option>
-                <option value="matorral_mediterraneo" selected>Matorral mediterráneo</option>
+                <option value="matorral_mediterraneo">Matorral mediterráneo</option>
                 <option value="pinar">Pinar</option>
               </select>
             </div>
@@ -622,7 +628,10 @@ const estado = {
   resultado: null,
   vientoAuto: { activo: false, cargando: false, datos: null, error: null },
   penAuto: { activo: false, cargando: false, datos: null, error: null },
-  editor: null
+  editor: null,
+  // Marca si el usuario ha tocado los sliders manuales (sin valor operativo hasta entonces)
+  velElegida: false,
+  penElegida: false
 };
 
 // === CONSULTAS A OPEN-METEO (con caché y control de tiempo) ===
@@ -1162,15 +1171,30 @@ function usarMiUbicacion() {
 function motivosBloqueo() {
   const motivos = [];
   if (!estado.fuego || !estado.zona) motivos.push("fija el incendio y la zona vulnerable en el mapa");
+
   const va = estado.vientoAuto, pa = estado.penAuto;
+
+  // Viento
   if (va.activo) {
     if (va.cargando) motivos.push("consultando viento…");
     else if (!va.datos && estado.fuego) motivos.push("viento automático no disponible (reintenta o pasa a manual)");
+  } else {
+    const dirElegida = document.getElementById("in-dir").value !== "";
+    if (!dirElegida || !estado.velElegida) motivos.push("elige dirección y velocidad del viento");
   }
+
+  // Pendiente
   if (pa.activo) {
     if (pa.cargando) motivos.push("consultando elevaciones…");
     else if (!pa.datos && estado.fuego && estado.zona) motivos.push("pendiente automática no disponible (reintenta o pasa a manual)");
+  } else {
+    const sentidoElegido = document.getElementById("in-sentido").value !== "";
+    if (!estado.penElegida || !sentidoElegido) motivos.push("elige la pendiente y el sentido de la ladera");
   }
+
+  // Combustible (siempre manual)
+  if (document.getElementById("in-comb").value === "") motivos.push("elige el combustible");
+
   return motivos;
 }
 
@@ -1237,6 +1261,14 @@ document.getElementById("btn-borrar").addEventListener("click", function () {
   estado.objetivo = "fuego";
   estado.vientoAuto.datos = null; estado.vientoAuto.error = null;
   estado.penAuto.datos = null; estado.penAuto.error = null;
+  estado.velElegida = false; estado.penElegida = false;
+  document.getElementById("wrap-vel").classList.add("sin-elegir");
+  document.getElementById("wrap-pen").classList.add("sin-elegir");
+  document.getElementById("out-vel").textContent = "sin elegir";
+  document.getElementById("out-pen").textContent = "sin elegir";
+  document.getElementById("in-dir").value = "";
+  document.getElementById("in-sentido").value = "";
+  document.getElementById("in-comb").value = "";
   cerrarEditor();
   invalidarResultado();
   renderVientoAuto();
@@ -1263,17 +1295,37 @@ document.getElementById("chk-pen-auto").addEventListener("change", function (e) 
   actualizarPendienteAuto();
 });
 
-const IDS_ENTRADAS = ["in-dir", "in-vel", "in-comb", "in-pen", "in-sentido"];
-for (const idEntrada of IDS_ENTRADAS) {
-  document.getElementById(idEntrada).addEventListener("input", function () {
+function marcarVelElegida() {
+  if (estado.velElegida) return;
+  estado.velElegida = true;
+  document.getElementById("wrap-vel").classList.remove("sin-elegir");
+  document.getElementById("out-vel").textContent = document.getElementById("in-vel").value + " km/h";
+}
+function marcarPenElegida() {
+  if (estado.penElegida) return;
+  estado.penElegida = true;
+  document.getElementById("wrap-pen").classList.remove("sin-elegir");
+  document.getElementById("out-pen").textContent = document.getElementById("in-pen").value + " %";
+}
+
+const IDS_SELECTS = ["in-dir", "in-comb", "in-sentido"];
+for (const idSel of IDS_SELECTS) {
+  document.getElementById(idSel).addEventListener("change", function () {
     invalidarResultado(); refrescar();
   });
 }
+
+document.getElementById("in-vel").addEventListener("pointerdown", marcarVelElegida);
 document.getElementById("in-vel").addEventListener("input", function (e) {
+  marcarVelElegida();
   document.getElementById("out-vel").textContent = e.target.value + " km/h";
+  invalidarResultado(); refrescar();
 });
+document.getElementById("in-pen").addEventListener("pointerdown", marcarPenElegida);
 document.getElementById("in-pen").addEventListener("input", function (e) {
+  marcarPenElegida();
   document.getElementById("out-pen").textContent = e.target.value + " %";
+  invalidarResultado(); refrescar();
 });
 
 renderVientoAuto();

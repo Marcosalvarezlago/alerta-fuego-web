@@ -52,8 +52,8 @@
   .chip.zona.activo{border-color:var(--azul);background:#eff6ff}
   .chip .titulo{display:flex;align-items:center;gap:6px}
   .editar{
-    border:none;background:transparent;cursor:pointer;padding:0 3px;
-    font-size:.85rem;color:var(--gris);line-height:1;
+    border:none;background:transparent;cursor:pointer;padding:2px 6px;
+    font-size:1rem;color:var(--gris);line-height:1;min-width:28px;min-height:24px;
   }
   .editar:hover{color:var(--tinta)}
   #editor{width:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:2px 0}
@@ -61,7 +61,7 @@
   #editor-titulo{font-size:.8rem;font-weight:800}
   #editor-input{
     flex:1 1 220px;min-width:180px;padding:8px;border:1px solid var(--borde);
-    border-radius:10px;font:inherit;font-variant-numeric:tabular-nums;
+    border-radius:10px;font:inherit;font-size:16px;font-variant-numeric:tabular-nums;
   }
   #editor-msg{font-size:.78rem;color:#b91c1c;width:100%}
   #btn-borrar,#btn-geo{border:1px solid var(--borde);background:#fff;border-radius:12px;padding:0 14px;cursor:pointer;font:inherit;font-size:.85rem}
@@ -166,6 +166,9 @@
   @media (max-width:480px){
     header .aviso{margin-left:0;width:100%}
     #resultado{max-height:52vh}
+    #barra .btn.primario{flex:1 1 100%;order:9;padding:12px}
+    .campo select{font-size:16px}
+    .chip{min-width:140px;flex-basis:140px}
   }
 </style>
 </head>
@@ -191,7 +194,7 @@
     <button id="btn-borrar" type="button">Borrar puntos</button>
     <div id="editor" hidden>
       <span id="editor-titulo"></span>
-      <input id="editor-input" type="text" inputmode="decimal" placeholder="40.1290, -5.4610" autocomplete="off">
+      <input id="editor-input" type="text" inputmode="text" placeholder="40.1290, -5.4610 o enlace de Google Maps" autocomplete="off">
       <button class="btn mini" id="editor-aplicar" type="button">Aplicar</button>
       <button class="btn mini" id="editor-cancelar" type="button">Cancelar</button>
       <span id="editor-msg"></span>
@@ -231,9 +234,9 @@
               <label for="in-sentido">El fuego avanza por la ladera</label>
               <select id="in-sentido">
                 <option value="" selected>Selecciona…</option>
-                <option value="subiendo">Subiendo</option>
+                <option value="subiendo">Subiendo la ladera</option>
                 <option value="llano">En llano</option>
-                <option value="bajando">Bajando</option>
+                <option value="bajando">Bajando la ladera</option>
               </select>
             </div>
           </div>
@@ -484,25 +487,93 @@ function calcularPendienteDesdeElevaciones(elevFuegoM, elevZonaM, distanciaM, um
 if (typeof module !== "undefined") {
   module.exports = { CARDINALES, direccionHaciaDesdeMeteo, gradosACardinal, calcularPendienteDesdeElevaciones };
 }
-// === PARSER DE COORDENADAS MANUALES ===
-// Acepta "40.1290, -5.4610" con coma, punto y coma o espacios como separador.
-// Decimales con punto. Valida rangos lat/lon. Los enlaces de mapas llegarán
-// en una fase posterior con su propio parser probado.
+// === PARSER DE UBICACIONES: coordenadas y enlaces de mapas ===
+// Devuelve {ok:true, lat, lon} o {ok:false, motivo} con motivo:
+//  "enlace_corto" (maps.app.goo.gl sin coordenadas),
+//  "utm" (enlace IGN antiguo con coordenadas UTM),
+//  "formato" (no se reconoce nada).
+// Evita el fallo típico de tomar zoom, fechas o ids como coordenadas:
+// en URLs solo se aceptan patrones fuertes.
 
-function parsearCoordenadas(texto) {
-  if (!texto) return null;
-  const t = String(texto).trim();
-  const m = t.match(/^(-?\d+(?:\.\d+)?)[\s,;]+(-?\d+(?:\.\d+)?)$/);
-  if (!m) return null;
-  const lat = parseFloat(m[1]);
-  const lon = parseFloat(m[2]);
-  if (!(lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180)) return null;
+function latLonValidos(lat, lon) {
+  return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+}
+
+// Conversión Web Mercator (EPSG:3857, metros) -> WGS84 grados.
+function mercatorAWgs84(x, y) {
+  const R = 6378137;
+  const lon = x / R * 180 / Math.PI;
+  const lat = (2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * 180 / Math.PI;
   return { lat, lon };
+}
+
+function parsearUbicacion(texto) {
+  if (!texto) return { ok: false, motivo: "formato" };
+  let t = String(texto).trim();
+  try { t = decodeURIComponent(t); } catch (e) { /* texto con % suelto: seguir tal cual */ }
+
+  const esUrl = /https?:\/\//.test(t);
+  const NUM = "(-?\\d+(?:\\.\\d+)?)";
+
+  if (esUrl) {
+    // 1) Google Maps: @lat,lon
+    let m = t.match(new RegExp("@\\s*" + NUM + "\\s*,\\s*" + NUM));
+    if (m) {
+      const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+      if (latLonValidos(lat, lon)) return { ok: true, lat, lon };
+    }
+    // 2) Google Maps: !3dLAT!4dLON
+    m = t.match(new RegExp("!3d" + NUM + "!4d" + NUM));
+    if (m) {
+      const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+      if (latLonValidos(lat, lon)) return { ok: true, lat, lon };
+    }
+    // 3) Google Maps: !2dLON!3dLAT
+    m = t.match(new RegExp("!2d" + NUM + "!3d" + NUM));
+    if (m) {
+      const lon = parseFloat(m[1]), lat = parseFloat(m[2]);
+      if (latLonValidos(lat, lon)) return { ok: true, lat, lon };
+    }
+    // 4) Parámetros de consulta: q, ll, query, center, destination, origin, daddr, saddr
+    const CLAVES = ["q", "ll", "query", "center", "destination", "origin", "daddr", "saddr"];
+    for (const clave of CLAVES) {
+      const re = new RegExp("[?&#]" + clave + "=" + NUM + "\\s*,\\s*" + NUM);
+      const p = t.match(re);
+      if (p) {
+        const a = parseFloat(p[1]), b = parseFloat(p[2]);
+        if (latLonValidos(a, b)) return { ok: true, lat: a, lon: b };
+        // Valores enormes: coordenadas Web Mercator (visores tipo Iberpix moderno)
+        if (Math.abs(a) > 180 || Math.abs(b) > 90) {
+          const c = mercatorAWgs84(a, b);
+          if (latLonValidos(c.lat, c.lon)) {
+            return { ok: true, lat: +c.lat.toFixed(6), lon: +c.lon.toFixed(6) };
+          }
+        }
+      }
+    }
+    // 5) Enlace IGN antiguo con UTM: x=...&y=...&srid=258xx
+    if (/[?&]x=-?\d/.test(t) && /[?&]y=-?\d/.test(t) && /srid=258\d\d/.test(t)) {
+      return { ok: false, motivo: "utm" };
+    }
+    // 6) Enlace corto de Google sin coordenadas en la URL
+    if (/maps\.app\.goo\.gl|goo\.gl\/maps/.test(t)) {
+      return { ok: false, motivo: "enlace_corto" };
+    }
+    return { ok: false, motivo: "formato" };
+  }
+
+  // Texto simple: "lat, lon" con coma, punto y coma o espacios (decimales con punto)
+  const m = t.match(new RegExp("^" + NUM + "[\\s,;]+" + NUM + "$"));
+  if (m) {
+    const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+    if (latLonValidos(lat, lon)) return { ok: true, lat, lon };
+  }
+  return { ok: false, motivo: "formato" };
 }
 // === FIN PARSER ===
 
 if (typeof module !== "undefined") {
-  module.exports = { parsearCoordenadas };
+  module.exports = { parsearUbicacion, mercatorAWgs84 };
 }
 // === TEXTOS DEL PROTOCOLO (documento Alerta Fuego) ===
 
@@ -820,7 +891,7 @@ function renderPendienteAuto() {
     const d = pa.datos;
     const signo = d.desnivelM >= 0 ? "+" : "";
     card.innerHTML =
-      "<b>" + Math.round(d.pendientePct) + " %</b>, el fuego avanzaría <b>" + d.sentidoLadera + "</b>." +
+      "<b>" + Math.round(d.pendientePct) + " %</b>, el fuego avanza <b>" + d.sentidoLadera + "</b>." +
       "<div class='mini-nota'>Elevación incendio " + Math.round(d.elevFuegoM) + " m · zona " +
       Math.round(d.elevZonaM) + " m · desnivel " + signo + Math.round(d.desnivelM) + " m. " +
       "Estimación provisional con solo los dos puntos extremos (" + d.fuente + ").</div>";
@@ -993,6 +1064,7 @@ function calcular() {
   dibujarCuadrantes(r);
   pintarResultado();
   document.getElementById("inputs").classList.remove("abierto");
+  document.getElementById("btn-datos").textContent = "Datos ▾";
   document.getElementById("resultado").classList.add("abierto");
   refrescar();
 }
@@ -1056,8 +1128,8 @@ function pintarResultado() {
         ' m/min</div><div class="s">V0 · FV · FP = ' + r.v0 + " · " + r.fv + " · " + r.fp + "</div></div>" +
     "</div>" +
 
-    '<div class="datos-usados"><b>Datos usados:</b> pendiente ' + ent.pendientePct + " % " + ent.sentidoLadera +
-      " (" + ent.fuentePendiente + ") · viento " + ent.velocidadVientoKmh + " km/h hacia " + ent.direccionVientoHacia +
+    '<div class="datos-usados"><b>Datos usados:</b> pendiente ' + ent.pendientePct + " % (el fuego avanza " + ent.sentidoLadera + ")" +
+      " (" + ent.fuentePendiente + ") · viento " + ent.velocidadVientoKmh + " km/h empujando hacia " + ent.direccionVientoHacia +
       " (" + ent.fuenteViento + ") · " + NOMBRE_COMBUSTIBLE[ent.tipoCombustible] + " (" + ent.fuenteCombustible + ").</div>" +
 
     '<details class="bloque" open>' +
@@ -1111,15 +1183,19 @@ function aplicarEditor() {
   const tipo = estado.editor;
   if (!tipo) return;
   const texto = document.getElementById("editor-input").value;
-  const c = parsearCoordenadas(texto);
-  if (!c) {
-    document.getElementById("editor-msg").textContent =
-      "No reconozco esas coordenadas. Formato: latitud, longitud con decimales de punto (ej. 40.1290, -5.4610).";
+  const r = parsearUbicacion(texto);
+  if (!r.ok) {
+    const mensajes = {
+      enlace_corto: "Los enlaces cortos de Google Maps no incluyen coordenadas. Abre el enlace en el navegador y copia la URL completa de la barra de direcciones, o pega las coordenadas directamente.",
+      utm: "Ese enlace del IGN usa coordenadas UTM. En el visor Iberpix, copia latitud y longitud del panel de coordenadas y pégalas aquí (ej. 40.1290, -5.4610).",
+      formato: "No reconozco esa ubicación. Pega coordenadas (ej. 40.1290, -5.4610) o un enlace completo de Google Maps."
+    };
+    document.getElementById("editor-msg").textContent = mensajes[r.motivo] || mensajes.formato;
     return;
   }
-  fijarPunto(tipo, { lat: c.lat, lng: c.lon });
-  map.setView([c.lat, c.lon], Math.max(map.getZoom(), 13));
-  mostrarToast((tipo === "fuego" ? "Incendio" : "Zona vulnerable") + " fijado en " + c.lat + ", " + c.lon);
+  fijarPunto(tipo, { lat: r.lat, lng: r.lon });
+  map.setView([r.lat, r.lon], Math.max(map.getZoom(), 13));
+  mostrarToast((tipo === "fuego" ? "Incendio" : "Zona vulnerable") + " fijado en " + r.lat + ", " + r.lon);
   cerrarEditor();
 }
 
@@ -1278,7 +1354,8 @@ document.getElementById("btn-borrar").addEventListener("click", function () {
 });
 
 document.getElementById("btn-datos").addEventListener("click", function () {
-  document.getElementById("inputs").classList.toggle("abierto");
+  const abierto = document.getElementById("inputs").classList.toggle("abierto");
+  document.getElementById("btn-datos").textContent = abierto ? "Datos ▴" : "Datos ▾";
 });
 document.getElementById("btn-calcular").addEventListener("click", calcular);
 document.getElementById("resumen").addEventListener("click", function () {

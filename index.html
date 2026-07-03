@@ -792,7 +792,7 @@ function renderVientoAuto() {
     card.innerHTML =
       "<b>" + Math.round(d.velocidadKmh) + " km/h</b>, empujando hacia <b>" + d.haciaCardinal + "</b> " +
       "(" + Math.round(d.haciaGrados) + "° hacia · sopla desde " + Math.round(d.desdeGrados) + "°)." +
-      "<div class='mini-nota'>Dato puntual consultado a las <b>" + d.horaConsulta + "</b> en el punto del incendio. " +
+      "<div class='mini-nota'>Dato puntual de <b>Open-Meteo</b> consultado a las <b>" + d.horaConsulta + "</b> en el punto del incendio. " +
       "Se reutiliza un máximo de " + MINUTOS_CACHE_VIENTO + " minutos: lo que ves es lo que se usa en el cálculo.</div>" +
       "<button class='btn mini' id='btn-viento-refresh' type='button'>🔄 Actualizar ahora</button>";
     document.getElementById("btn-viento-refresh").addEventListener("click", () => actualizarVientoAuto(true));

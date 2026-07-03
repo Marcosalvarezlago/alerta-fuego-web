@@ -49,8 +49,22 @@
   .chip.activo{border-style:dashed}
   .chip.fuego.activo{border-color:var(--rojo);background:#fef2f2}
   .chip.zona.activo{border-color:var(--azul);background:#eff6ff}
-  #btn-borrar{border:1px solid var(--borde);background:#fff;border-radius:12px;padding:0 14px;cursor:pointer;font:inherit;font-size:.85rem}
-  #btn-borrar:hover{background:var(--fondo)}
+  .chip .titulo{display:flex;align-items:center;gap:6px}
+  .editar{
+    border:none;background:transparent;cursor:pointer;padding:0 3px;
+    font-size:.85rem;color:var(--gris);line-height:1;
+  }
+  .editar:hover{color:var(--tinta)}
+  #editor{width:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:2px 0}
+  #editor[hidden]{display:none}
+  #editor-titulo{font-size:.8rem;font-weight:800}
+  #editor-input{
+    flex:1 1 220px;min-width:180px;padding:8px;border:1px solid var(--borde);
+    border-radius:10px;font:inherit;font-variant-numeric:tabular-nums;
+  }
+  #editor-msg{font-size:.78rem;color:#b91c1c;width:100%}
+  #btn-borrar,#btn-geo{border:1px solid var(--borde);background:#fff;border-radius:12px;padding:0 14px;cursor:pointer;font:inherit;font-size:.85rem}
+  #btn-borrar:hover,#btn-geo:hover{background:var(--fondo)}
   #hint{font-size:.8rem;color:var(--gris);width:100%;margin-top:2px}
 
   #map{flex:1;min-height:260px}
@@ -87,12 +101,40 @@
 
   #inputs{display:none;border-top:1px dashed var(--borde);padding:10px 12px}
   #inputs.abierto{display:block}
+  .contenedor-secciones{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:16px}
+  .seccion-datos .grid-datos{grid-template-columns:1fr}
+  .seccion-datos{margin-bottom:12px}
+  .cab-seccion{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+    font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--gris);margin-bottom:6px;
+  }
+  .sw{
+    display:flex;align-items:center;gap:6px;cursor:pointer;
+    font-size:.8rem;font-weight:600;text-transform:none;letter-spacing:0;color:var(--tinta);
+  }
+  .sw input{accent-color:var(--rojo);width:16px;height:16px}
+  .auto-card{
+    border:1px solid var(--borde);border-radius:12px;padding:10px 12px;
+    background:var(--fondo);font-size:.86rem;line-height:1.5;
+  }
+  .auto-card .err{color:#b91c1c;font-weight:600}
+  .auto-card .mini-nota{color:var(--gris);font-size:.78rem;margin-top:4px}
+  .btn.mini{padding:5px 10px;font-size:.78rem;border-radius:9px;margin-top:6px}
   .grid-datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px}
   .campo label{display:block;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--gris);margin-bottom:4px}
   .campo select{width:100%;padding:8px;border:1px solid var(--borde);border-radius:10px;font:inherit;background:#fff}
   .campo .fila-rango{display:flex;align-items:center;gap:10px}
   .campo input[type=range]{flex:1;accent-color:var(--rojo)}
   .campo output{min-width:66px;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+
+  .toast{
+    position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+    background:#111827;color:#fff;padding:9px 16px;border-radius:999px;
+    font-size:.85rem;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:2000;
+    opacity:0;pointer-events:none;transition:opacity .25s;max-width:92vw;text-align:center;
+  }
+  .toast.on{opacity:.96}
 
   #resultado{display:none;border-top:1px solid var(--borde);padding:12px;max-height:48vh;overflow-y:auto}
   #resultado.abierto{display:block}
@@ -133,15 +175,23 @@
   </header>
 
   <div id="controles">
-    <button class="chip fuego activo" id="chip-fuego" type="button">
-      <span class="titulo">🔥 Incendio</span>
+    <div class="chip fuego activo" id="chip-fuego" role="button" tabindex="0">
+      <span class="titulo">🔥 Incendio <button class="editar" id="editar-fuego" type="button" title="Escribir coordenadas a mano">✎</button></span>
       <span class="coords" id="coords-fuego">Sin fijar — toca el mapa</span>
-    </button>
-    <button class="chip zona" id="chip-zona" type="button">
-      <span class="titulo">🏠 Zona vulnerable</span>
+    </div>
+    <div class="chip zona" id="chip-zona" role="button" tabindex="0">
+      <span class="titulo">🏠 Zona vulnerable <button class="editar" id="editar-zona" type="button" title="Escribir coordenadas a mano">✎</button></span>
       <span class="coords" id="coords-zona">Sin fijar</span>
-    </button>
+    </div>
+    <button id="btn-geo" type="button" title="Fijar la zona vulnerable en tu posición actual">📍 Mi ubicación</button>
     <button id="btn-borrar" type="button">Borrar puntos</button>
+    <div id="editor" hidden>
+      <span id="editor-titulo"></span>
+      <input id="editor-input" type="text" inputmode="decimal" placeholder="40.1290, -5.4610" autocomplete="off">
+      <button class="btn mini" id="editor-aplicar" type="button">Aplicar</button>
+      <button class="btn mini" id="editor-cancelar" type="button">Cancelar</button>
+      <span id="editor-msg"></span>
+    </div>
     <div id="hint"></div>
   </div>
 
@@ -158,51 +208,78 @@
     </div>
 
     <div id="inputs">
-      <div class="grid-datos">
-        <div class="campo">
-          <label for="in-dir">Viento: dirección hacia la que empuja</label>
-          <select id="in-dir">
-            <option value="N">Hacia el norte ↑</option>
-            <option value="NE" selected>Hacia el nordeste ↗</option>
-            <option value="E">Hacia el este →</option>
-            <option value="SE">Hacia el sudeste ↘</option>
-            <option value="S">Hacia el sur ↓</option>
-            <option value="SO">Hacia el suroeste ↙</option>
-            <option value="O">Hacia el oeste ←</option>
-            <option value="NO">Hacia el noroeste ↖</option>
-          </select>
+      <div class="contenedor-secciones">
+
+        <div class="seccion-datos">
+          <div class="cab-seccion">
+            <span>Pendiente</span>
+            <label class="sw"><input type="checkbox" id="chk-pen-auto"> Automática (elevación)</label>
+          </div>
+          <div id="pen-manual" class="grid-datos">
+            <div class="campo">
+              <label for="in-pen">Pendiente aproximada</label>
+              <div class="fila-rango">
+                <input type="range" id="in-pen" min="0" max="100" step="1" value="30">
+                <output id="out-pen">30 %</output>
+              </div>
+            </div>
+            <div class="campo">
+              <label for="in-sentido">El fuego avanza por la ladera</label>
+              <select id="in-sentido">
+                <option value="subiendo" selected>Subiendo</option>
+                <option value="llano">En llano</option>
+                <option value="bajando">Bajando</option>
+              </select>
+            </div>
+          </div>
+          <div id="pen-auto" class="auto-card" hidden></div>
         </div>
-        <div class="campo">
-          <label for="in-vel">Velocidad del viento</label>
-          <div class="fila-rango">
-            <input type="range" id="in-vel" min="0" max="80" step="1" value="20">
-            <output id="out-vel">20 km/h</output>
+
+        <div class="seccion-datos">
+          <div class="cab-seccion">
+            <span>Viento</span>
+            <label class="sw"><input type="checkbox" id="chk-viento-auto"> Automático (Open-Meteo)</label>
+          </div>
+          <div id="viento-manual" class="grid-datos">
+            <div class="campo">
+              <label for="in-dir">Dirección hacia la que empuja</label>
+              <select id="in-dir">
+                <option value="N">Hacia el norte ↑</option>
+                <option value="NE" selected>Hacia el nordeste ↗</option>
+                <option value="E">Hacia el este →</option>
+                <option value="SE">Hacia el sudeste ↘</option>
+                <option value="S">Hacia el sur ↓</option>
+                <option value="SO">Hacia el suroeste ↙</option>
+                <option value="O">Hacia el oeste ←</option>
+                <option value="NO">Hacia el noroeste ↖</option>
+              </select>
+            </div>
+            <div class="campo">
+              <label for="in-vel">Velocidad</label>
+              <div class="fila-rango">
+                <input type="range" id="in-vel" min="0" max="80" step="1" value="20">
+                <output id="out-vel">20 km/h</output>
+              </div>
+            </div>
+          </div>
+          <div id="viento-auto" class="auto-card" hidden></div>
+        </div>
+
+        <div class="seccion-datos">
+          <div class="cab-seccion"><span>Combustible</span></div>
+          <div class="grid-datos">
+            <div class="campo">
+              <label for="in-comb">Tipo dominante</label>
+              <select id="in-comb">
+                <option value="pastos_bajos">Pastos bajos</option>
+                <option value="quercus">Bosque de Quercus / encinar / robledal</option>
+                <option value="matorral_mediterraneo" selected>Matorral mediterráneo</option>
+                <option value="pinar">Pinar</option>
+              </select>
+            </div>
           </div>
         </div>
-        <div class="campo">
-          <label for="in-comb">Combustible dominante</label>
-          <select id="in-comb">
-            <option value="pastos_bajos">Pastos bajos</option>
-            <option value="quercus">Bosque de Quercus / encinar / robledal</option>
-            <option value="matorral_mediterraneo" selected>Matorral mediterráneo</option>
-            <option value="pinar">Pinar</option>
-          </select>
-        </div>
-        <div class="campo">
-          <label for="in-pen">Pendiente aproximada</label>
-          <div class="fila-rango">
-            <input type="range" id="in-pen" min="0" max="100" step="1" value="30">
-            <output id="out-pen">30 %</output>
-          </div>
-        </div>
-        <div class="campo">
-          <label for="in-sentido">El fuego avanza por la ladera</label>
-          <select id="in-sentido">
-            <option value="subiendo" selected>Subiendo</option>
-            <option value="llano">En llano</option>
-            <option value="bajando">Bajando</option>
-          </select>
-        </div>
+
       </div>
     </div>
 
@@ -370,6 +447,56 @@ function crearSectorLatLng(lat, lon, direccionCentral, aperturaGrados, radioM, p
 if (typeof module !== "undefined") {
   module.exports = { puntoDesdeOrigen, crearSectorLatLng };
 }
+// === CONVERSIONES METEO Y TERRENO (puras, verificadas) ===
+
+const CARDINALES = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"];
+
+// La API meteorológica da la dirección DESDE la que sopla el viento.
+// El modelo usa la dirección HACIA la que empuja el fuego: +180°.
+function direccionHaciaDesdeMeteo(desdeGrados) {
+  return (desdeGrados + 180) % 360;
+}
+
+function gradosACardinal(grados) {
+  const g = ((grados % 360) + 360) % 360;
+  return CARDINALES[Math.round(g / 45) % 8];
+}
+
+// Pendiente provisional entre los dos puntos extremos.
+// Umbral de 5 m de desnivel para considerar "llano" (criterio original).
+function calcularPendienteDesdeElevaciones(elevFuegoM, elevZonaM, distanciaM, umbralLlanoM = 5) {
+  const desnivelM = elevZonaM - elevFuegoM;
+  let pendientePct = distanciaM > 0 ? Math.abs(desnivelM) / distanciaM * 100 : 0;
+  pendientePct = Math.max(0, Math.min(100, pendientePct));
+  const sentidoLadera =
+    Math.abs(desnivelM) < umbralLlanoM ? "llano" : (desnivelM > 0 ? "subiendo" : "bajando");
+  return { desnivelM, pendientePct, sentidoLadera };
+}
+// === FIN CONVERSIONES ===
+
+if (typeof module !== "undefined") {
+  module.exports = { CARDINALES, direccionHaciaDesdeMeteo, gradosACardinal, calcularPendienteDesdeElevaciones };
+}
+// === PARSER DE COORDENADAS MANUALES ===
+// Acepta "40.1290, -5.4610" con coma, punto y coma o espacios como separador.
+// Decimales con punto. Valida rangos lat/lon. Los enlaces de mapas llegarán
+// en una fase posterior con su propio parser probado.
+
+function parsearCoordenadas(texto) {
+  if (!texto) return null;
+  const t = String(texto).trim();
+  const m = t.match(/^(-?\d+(?:\.\d+)?)[\s,;]+(-?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]);
+  const lon = parseFloat(m[2]);
+  if (!(lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180)) return null;
+  return { lat, lon };
+}
+// === FIN PARSER ===
+
+if (typeof module !== "undefined") {
+  module.exports = { parsearCoordenadas };
+}
 // === TEXTOS DEL PROTOCOLO (documento Alerta Fuego) ===
 
 const PROTOCOLOS = {
@@ -476,16 +603,219 @@ const TEXTO_CUADRANTE = {
   }
 };
 
+const NOMBRE_COMBUSTIBLE = {
+  pastos_bajos: "Pastos bajos",
+  quercus: "Bosque de Quercus / encinar / robledal",
+  matorral_mediterraneo: "Matorral mediterráneo",
+  pinar: "Pinar"
+};
+
 // === ESTADO ===
 
 const CENTRO_TRABAJO = [40.1290, -5.4610];
+const MINUTOS_CACHE_VIENTO = 10;
 
 const estado = {
   fuego: null,
   zona: null,
   objetivo: "fuego",
-  resultado: null
+  resultado: null,
+  vientoAuto: { activo: false, cargando: false, datos: null, error: null },
+  penAuto: { activo: false, cargando: false, datos: null, error: null },
+  editor: null
 };
+
+// === CONSULTAS A OPEN-METEO (con caché y control de tiempo) ===
+
+function horaActualTexto() {
+  return new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+}
+
+async function fetchJson(url, timeoutMs = 7000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return await r.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+const cacheViento = new Map();
+function claveViento(lat, lon) { return lat.toFixed(3) + "," + lon.toFixed(3); }
+
+async function obtenerVientoCacheado(lat, lon, forzar = false) {
+  const clave = claveViento(lat, lon);
+  const ahora = Date.now();
+  const e = cacheViento.get(clave);
+  if (!forzar && e && ahora - e.t < MINUTOS_CACHE_VIENTO * 60000) return e.d;
+
+  const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat +
+    "&longitude=" + lon + "&current=wind_speed_10m,wind_direction_10m&timezone=auto";
+  const j = await fetchJson(url);
+  const c = j.current;
+  if (!c || typeof c.wind_speed_10m !== "number" || typeof c.wind_direction_10m !== "number") {
+    throw new Error("Respuesta sin datos de viento");
+  }
+  const hacia = direccionHaciaDesdeMeteo(c.wind_direction_10m);
+  const d = {
+    velocidadKmh: c.wind_speed_10m,
+    desdeGrados: c.wind_direction_10m,
+    haciaGrados: hacia,
+    haciaCardinal: gradosACardinal(hacia),
+    horaConsulta: horaActualTexto()
+  };
+  cacheViento.set(clave, { t: ahora, d });
+  return d;
+}
+
+const cachePendiente = new Map();
+function clavePendiente(f, z) {
+  return [f.lat.toFixed(4), f.lon.toFixed(4), z.lat.toFixed(4), z.lon.toFixed(4)].join(",");
+}
+
+async function obtenerPendienteCacheada(f, z) {
+  const clave = clavePendiente(f, z);
+  const e = cachePendiente.get(clave); // la elevación del terreno no caduca
+  if (e) return e;
+
+  const url = "https://api.open-meteo.com/v1/elevation?latitude=" + f.lat + "," + z.lat +
+    "&longitude=" + f.lon + "," + z.lon;
+  const j = await fetchJson(url);
+  if (!j.elevation || j.elevation.length !== 2) throw new Error("Respuesta sin elevaciones");
+
+  const elevF = j.elevation[0], elevZ = j.elevation[1];
+  const distanciaM = calcularDistanciaM(f.lat, f.lon, z.lat, z.lon);
+  const p = calcularPendienteDesdeElevaciones(elevF, elevZ, distanciaM);
+  const d = {
+    desnivelM: p.desnivelM,
+    pendientePct: p.pendientePct,
+    sentidoLadera: p.sentidoLadera,
+    elevFuegoM: elevF,
+    elevZonaM: elevZ,
+    distanciaM: distanciaM,
+    fuente: "Open-Meteo elevación (provisional)"
+  };
+  cachePendiente.set(clave, d);
+  return d;
+}
+
+// === ACTUALIZACIÓN DE DATOS AUTOMÁTICOS (con protección contra respuestas tardías) ===
+
+let tokenViento = 0;
+async function actualizarVientoAuto(forzar = false) {
+  const va = estado.vientoAuto;
+  if (!va.activo) { renderVientoAuto(); refrescar(); return; }
+
+  if (!estado.fuego) {
+    va.datos = null; va.error = null; va.cargando = false;
+    renderVientoAuto(); refrescar(); return;
+  }
+
+  const token = ++tokenViento;
+  va.cargando = true; va.error = null;
+  renderVientoAuto(); refrescar();
+  try {
+    const d = await obtenerVientoCacheado(estado.fuego.lat, estado.fuego.lon, forzar);
+    if (token !== tokenViento) return; // llegó tarde: hay una consulta más reciente
+    va.datos = d; va.error = null;
+  } catch (err) {
+    if (token !== tokenViento) return;
+    va.datos = null;
+    va.error = "No se pudo obtener el viento (" +
+      (err && err.name === "AbortError" ? "tiempo agotado" : err.message) + ").";
+  }
+  va.cargando = false;
+  renderVientoAuto(); refrescar();
+}
+
+let tokenPen = 0;
+async function actualizarPendienteAuto() {
+  const pa = estado.penAuto;
+  if (!pa.activo) { renderPendienteAuto(); refrescar(); return; }
+
+  if (!estado.fuego || !estado.zona) {
+    pa.datos = null; pa.error = null; pa.cargando = false;
+    renderPendienteAuto(); refrescar(); return;
+  }
+
+  const token = ++tokenPen;
+  pa.cargando = true; pa.error = null;
+  renderPendienteAuto(); refrescar();
+  try {
+    const d = await obtenerPendienteCacheada(estado.fuego, estado.zona);
+    if (token !== tokenPen) return;
+    pa.datos = d; pa.error = null;
+  } catch (err) {
+    if (token !== tokenPen) return;
+    pa.datos = null;
+    pa.error = "No se pudo obtener la elevación (" +
+      (err && err.name === "AbortError" ? "tiempo agotado" : err.message) + ").";
+  }
+  pa.cargando = false;
+  renderPendienteAuto(); refrescar();
+}
+
+// === TARJETAS DE ESTADO AUTOMÁTICO ===
+
+function renderVientoAuto() {
+  const va = estado.vientoAuto;
+  document.getElementById("viento-manual").hidden = va.activo;
+  const card = document.getElementById("viento-auto");
+  card.hidden = !va.activo;
+  if (!va.activo) return;
+
+  if (!estado.fuego) {
+    card.innerHTML = "Fija primero el punto del <b>incendio</b>: el viento se consulta en esa ubicación." +
+      "<div class='mini-nota'>Mientras tanto el cálculo queda bloqueado: no se usan valores inventados.</div>";
+  } else if (va.cargando) {
+    card.innerHTML = "Consultando viento en Open-Meteo…";
+  } else if (va.error) {
+    card.innerHTML = "<span class='err'>" + va.error + "</span>" +
+      "<div class='mini-nota'>El cálculo queda bloqueado: reintenta o pasa a viento manual.</div>" +
+      "<button class='btn mini' id='btn-viento-retry' type='button'>Reintentar</button>";
+    document.getElementById("btn-viento-retry").addEventListener("click", () => actualizarVientoAuto(true));
+  } else if (va.datos) {
+    const d = va.datos;
+    card.innerHTML =
+      "<b>" + Math.round(d.velocidadKmh) + " km/h</b>, empujando hacia <b>" + d.haciaCardinal + "</b> " +
+      "(" + Math.round(d.haciaGrados) + "° hacia · sopla desde " + Math.round(d.desdeGrados) + "°)." +
+      "<div class='mini-nota'>Dato puntual consultado a las <b>" + d.horaConsulta + "</b> en el punto del incendio. " +
+      "Se reutiliza un máximo de " + MINUTOS_CACHE_VIENTO + " minutos: lo que ves es lo que se usa en el cálculo.</div>" +
+      "<button class='btn mini' id='btn-viento-refresh' type='button'>🔄 Actualizar ahora</button>";
+    document.getElementById("btn-viento-refresh").addEventListener("click", () => actualizarVientoAuto(true));
+  }
+}
+
+function renderPendienteAuto() {
+  const pa = estado.penAuto;
+  document.getElementById("pen-manual").hidden = pa.activo;
+  const card = document.getElementById("pen-auto");
+  card.hidden = !pa.activo;
+  if (!pa.activo) return;
+
+  if (!estado.fuego || !estado.zona) {
+    card.innerHTML = "Fija <b>incendio</b> y <b>zona vulnerable</b>: la pendiente se estima entre ambos puntos." +
+      "<div class='mini-nota'>Mientras tanto el cálculo queda bloqueado: no se usan valores inventados.</div>";
+  } else if (pa.cargando) {
+    card.innerHTML = "Consultando elevaciones en Open-Meteo…";
+  } else if (pa.error) {
+    card.innerHTML = "<span class='err'>" + pa.error + "</span>" +
+      "<div class='mini-nota'>El cálculo queda bloqueado: reintenta o pasa a pendiente manual.</div>" +
+      "<button class='btn mini' id='btn-pen-retry' type='button'>Reintentar</button>";
+    document.getElementById("btn-pen-retry").addEventListener("click", () => actualizarPendienteAuto());
+  } else if (pa.datos) {
+    const d = pa.datos;
+    const signo = d.desnivelM >= 0 ? "+" : "";
+    card.innerHTML =
+      "<b>" + Math.round(d.pendientePct) + " %</b>, el fuego avanzaría <b>" + d.sentidoLadera + "</b>." +
+      "<div class='mini-nota'>Elevación incendio " + Math.round(d.elevFuegoM) + " m · zona " +
+      Math.round(d.elevZonaM) + " m · desnivel " + signo + Math.round(d.desnivelM) + " m. " +
+      "Estimación provisional con solo los dos puntos extremos (" + d.fuente + ").</div>";
+  }
+}
 
 // === MAPA ===
 
@@ -506,7 +836,7 @@ function icono(tipo) {
   const emoji = tipo === "fuego" ? "🔥" : "🏠";
   return L.divIcon({
     className: "",
-    html: `<div class="marcador ${tipo}">${emoji}</div>`,
+    html: '<div class="marcador ' + tipo + '">' + emoji + "</div>",
     iconSize: [34, 34],
     iconAnchor: [17, 17]
   });
@@ -514,27 +844,34 @@ function icono(tipo) {
 
 const marcadores = { fuego: null, zona: null };
 let linea = null;
-let capasCalculo = [];   // sectores + flecha de viento
+let capasCalculo = [];
+
+function alCambiarPunto(tipo) {
+  invalidarResultado();
+  if (tipo === "fuego" && estado.vientoAuto.activo) actualizarVientoAuto();
+  if (estado.penAuto.activo) actualizarPendienteAuto();
+  refrescar();
+}
 
 function fijarPunto(tipo, latlng) {
   estado[tipo] = { lat: +latlng.lat.toFixed(6), lon: +latlng.lng.toFixed(6) };
 
   if (!marcadores[tipo]) {
     marcadores[tipo] = L.marker(latlng, { icon: icono(tipo), draggable: true }).addTo(map);
-    marcadores[tipo].on("drag dragend", (e) => {
+    marcadores[tipo].on("drag", (e) => {
       const p = e.target.getLatLng();
       estado[tipo] = { lat: +p.lat.toFixed(6), lon: +p.lng.toFixed(6) };
       invalidarResultado();
       refrescar();
     });
+    marcadores[tipo].on("dragend", () => alCambiarPunto(tipo));
   } else {
     marcadores[tipo].setLatLng(latlng);
   }
 
   if (tipo === "fuego" && !estado.zona) estado.objetivo = "zona";
 
-  invalidarResultado();
-  refrescar();
+  alCambiarPunto(tipo);
 }
 
 map.on("click", (e) => fijarPunto(estado.objetivo, e.latlng));
@@ -558,7 +895,6 @@ function dibujarCuadrantes(r) {
   limpiarCapasCalculo();
   const f = estado.fuego;
   const dir = r.direccionVientoGrados;
-  // Radio visual proporcional a la distancia: sin decisiones extra para el usuario.
   const radio = Math.min(12000, Math.max(900, r.distanciaM * 1.15));
 
   const sectores = [
@@ -567,10 +903,10 @@ function dibujarCuadrantes(r) {
     ["Cuadrante de alerta", dir - 90, "#f59e0b", 0.24],
     ["Cuadrante sin riesgo directo", dir + 180, "#10b981", 0.20]
   ];
-  for (const [nombre, d, color, op] of sectores) {
-    const pol = L.polygon(crearSectorLatLng(f.lat, f.lon, d, 90, radio), {
-      color, weight: 2, fillColor: color, fillOpacity: op
-    }).bindTooltip(nombre).addTo(map);
+  for (const s of sectores) {
+    const pol = L.polygon(crearSectorLatLng(f.lat, f.lon, s[1], 90, radio), {
+      color: s[2], weight: 2, fillColor: s[2], fillOpacity: s[3]
+    }).bindTooltip(s[0]).addTo(map);
     capasCalculo.push(pol);
   }
 
@@ -581,12 +917,41 @@ function dibujarCuadrantes(r) {
 }
 
 function leerEntradas() {
+  const va = estado.vientoAuto, pa = estado.penAuto;
+
+  const viento = va.activo
+    ? {
+        direccionVientoHacia: va.datos.haciaCardinal,
+        velocidadVientoKmh: Math.round(va.datos.velocidadKmh),
+        fuenteViento: "Open-Meteo, " + va.datos.horaConsulta
+      }
+    : {
+        direccionVientoHacia: document.getElementById("in-dir").value,
+        velocidadVientoKmh: +document.getElementById("in-vel").value,
+        fuenteViento: "manual"
+      };
+
+  const pendiente = pa.activo
+    ? {
+        pendientePct: Math.round(pa.datos.pendientePct),
+        sentidoLadera: pa.datos.sentidoLadera,
+        fuentePendiente: "Open-Meteo elevación, provisional"
+      }
+    : {
+        pendientePct: +document.getElementById("in-pen").value,
+        sentidoLadera: document.getElementById("in-sentido").value,
+        fuentePendiente: "manual"
+      };
+
   return {
-    direccionVientoHacia: document.getElementById("in-dir").value,
-    velocidadVientoKmh: +document.getElementById("in-vel").value,
+    direccionVientoHacia: viento.direccionVientoHacia,
+    velocidadVientoKmh: viento.velocidadVientoKmh,
+    fuenteViento: viento.fuenteViento,
+    pendientePct: pendiente.pendientePct,
+    sentidoLadera: pendiente.sentidoLadera,
+    fuentePendiente: pendiente.fuentePendiente,
     tipoCombustible: document.getElementById("in-comb").value,
-    pendientePct: +document.getElementById("in-pen").value,
-    sentidoLadera: document.getElementById("in-sentido").value
+    fuenteCombustible: "manual"
   };
 }
 
@@ -595,9 +960,26 @@ function calcular() {
   const r = evaluarAlertaFuego({
     latFuego: estado.fuego.lat, lonFuego: estado.fuego.lon,
     latZona: estado.zona.lat, lonZona: estado.zona.lon,
-    ...ent
+    direccionVientoHacia: ent.direccionVientoHacia,
+    velocidadVientoKmh: ent.velocidadVientoKmh,
+    tipoCombustible: ent.tipoCombustible,
+    pendientePct: ent.pendientePct,
+    sentidoLadera: ent.sentidoLadera
   });
-  estado.resultado = { ...r, entradas: ent };
+  estado.resultado = {
+    distanciaM: r.distanciaM,
+    rumboFuegoZona: r.rumboFuegoZona,
+    direccionVientoGrados: r.direccionVientoGrados,
+    diferenciaFirmada: r.diferenciaFirmada,
+    cuadrante: r.cuadrante,
+    v0: r.v0, fv: r.fv, fp: r.fp, vpif: r.vpif,
+    tiempoMin: r.tiempoMin,
+    tiempoTexto: r.tiempoTexto,
+    escenario: r.escenario,
+    entradas: ent,
+    vientoAutoDatos: estado.vientoAuto.activo ? estado.vientoAuto.datos : null,
+    penAutoDatos: estado.penAuto.activo ? estado.penAuto.datos : null
+  };
   dibujarCuadrantes(r);
   pintarResultado();
   document.getElementById("inputs").classList.remove("abierto");
@@ -606,13 +988,6 @@ function calcular() {
 }
 
 // === PINTADO DEL RESULTADO ===
-
-const NOMBRE_COMBUSTIBLE = {
-  pastos_bajos: "Pastos bajos",
-  quercus: "Bosque de Quercus / encinar / robledal",
-  matorral_mediterraneo: "Matorral mediterráneo",
-  pinar: "Pinar"
-};
 
 function formatearMetros(m) {
   return m >= 1000 ? (m / 1000).toFixed(2) + " km" : Math.round(m) + " m";
@@ -623,8 +998,8 @@ function pintarResultado() {
   const t = TEXTO_CUADRANTE[r.cuadrante];
   const ent = r.entradas;
 
-  // Protocolo: en "sin riesgo directo" se muestra vigilancia preventiva,
-  // no el protocolo de tiempos, para no alarmar fuera de la trayectoria principal.
+  // Regla de presentación: fuera de la trayectoria principal se muestra
+  // vigilancia preventiva, no el protocolo de tiempos.
   const escenarioProtocolo = r.cuadrante === "sin_riesgo" ? "vigilancia_preventiva" : r.escenario;
   const p = PROTOCOLOS[escenarioProtocolo];
 
@@ -640,131 +1015,270 @@ function pintarResultado() {
     tiempoS = "Referencia prudencial por si el frente deriva lateralmente.";
   }
 
-  const acciones = p.acciones.map((a) => `<li>${a}</li>`).join("");
+  const acciones = p.acciones.map(function (a) { return "<li>" + a + "</li>"; }).join("");
 
-  document.getElementById("resultado").innerHTML = `
-    <div class="estado ${t.clase}">
-      <div class="etiqueta">${t.etiqueta}</div>
-      <div class="titulo">${t.titulo}</div>
-      <div class="desc">${t.desc}</div>
-    </div>
+  let tecExtra = "";
+  if (r.vientoAutoDatos) {
+    const dv = r.vientoAutoDatos;
+    tecExtra += "Viento Open-Meteo: sopla desde " + Math.round(dv.desdeGrados) + "° → empuja hacia " +
+      Math.round(dv.haciaGrados) + "° (" + dv.haciaCardinal + "), consultado a las " + dv.horaConsulta + ".<br>";
+  }
+  if (r.penAutoDatos) {
+    const dp = r.penAutoDatos;
+    const signo = dp.desnivelM >= 0 ? "+" : "";
+    tecExtra += "Elevaciones Open-Meteo: incendio " + Math.round(dp.elevFuegoM) + " m · zona " +
+      Math.round(dp.elevZonaM) + " m · desnivel " + signo + Math.round(dp.desnivelM) + " m.<br>";
+  }
 
-    <div class="metricas">
-      <div class="metrica"><div class="l">Distancia</div><div class="v">${formatearMetros(r.distanciaM)}</div><div class="s">Entre incendio y zona vulnerable.</div></div>
-      <div class="metrica"><div class="l">Tiempo estimado</div><div class="v">${tiempoV}</div><div class="s">${tiempoS}</div></div>
-      <div class="metrica"><div class="l">VPIF</div><div class="v">${r.vpif.toFixed(1)} m/min</div><div class="s">V0 · FV · FP = ${r.v0} · ${r.fv} · ${r.fp}</div></div>
-    </div>
+  document.getElementById("resultado").innerHTML =
+    '<div class="estado ' + t.clase + '">' +
+      '<div class="etiqueta">' + t.etiqueta + "</div>" +
+      '<div class="titulo">' + t.titulo + "</div>" +
+      '<div class="desc">' + t.desc + "</div>" +
+    "</div>" +
 
-    <div class="datos-usados">
-      <b>Datos usados (manuales):</b> viento ${ent.velocidadVientoKmh} km/h hacia ${ent.direccionVientoHacia} ·
-      ${NOMBRE_COMBUSTIBLE[ent.tipoCombustible]} · pendiente ${ent.pendientePct} % (${ent.sentidoLadera}).
-    </div>
+    '<div class="metricas">' +
+      '<div class="metrica"><div class="l">Distancia</div><div class="v">' + formatearMetros(r.distanciaM) +
+        '</div><div class="s">Entre incendio y zona vulnerable.</div></div>' +
+      '<div class="metrica"><div class="l">Tiempo estimado</div><div class="v">' + tiempoV +
+        '</div><div class="s">' + tiempoS + "</div></div>" +
+      '<div class="metrica"><div class="l">VPIF</div><div class="v">' + r.vpif.toFixed(1) +
+        ' m/min</div><div class="s">V0 · FV · FP = ' + r.v0 + " · " + r.fv + " · " + r.fp + "</div></div>" +
+    "</div>" +
 
-    <details class="bloque" open>
-      <summary>${p.encabezado}: ${p.titulo}</summary>
-      <ul>${acciones}</ul>
-    </details>
+    '<div class="datos-usados"><b>Datos usados:</b> pendiente ' + ent.pendientePct + " % " + ent.sentidoLadera +
+      " (" + ent.fuentePendiente + ") · viento " + ent.velocidadVientoKmh + " km/h hacia " + ent.direccionVientoHacia +
+      " (" + ent.fuenteViento + ") · " + NOMBRE_COMBUSTIBLE[ent.tipoCombustible] + " (" + ent.fuenteCombustible + ").</div>" +
 
-    <details class="bloque">
-      <summary>Detalles técnicos del cálculo</summary>
-      <div class="tec">
-        Rumbo incendio → zona: ${r.rumboFuegoZona.toFixed(1)}° ·
-        Dirección del viento: ${r.direccionVientoGrados}° ·
-        Diferencia angular: ${r.diferenciaFirmada.toFixed(1)}°<br>
-        Cuadrante: ${r.cuadrante} · Escenario por tiempo: ${r.escenario}<br>
-        VPIF = ${r.v0} · ${r.fv} · ${r.fp} = ${r.vpif.toFixed(2)} m/min ·
-        Tiempo = ${Math.round(r.distanciaM)} m / ${r.vpif.toFixed(2)} = ${r.tiempoMin.toFixed(1)} min
-      </div>
-    </details>
+    '<details class="bloque" open>' +
+      "<summary>" + p.encabezado + ": " + p.titulo + "</summary>" +
+      "<ul>" + acciones + "</ul>" +
+    "</details>" +
 
-    <div class="recordatorio">
-      <strong>Recordatorio:</strong> estimación grosera y orientativa, no un modelo profesional.
-      Úsala para anticiparte, retirarte antes y preparar decisiones prudentes; nunca para apurar
-      tiempos ni justificar entrar o permanecer en zonas comprometidas. Ante peligro: <strong>112</strong>.
-    </div>
-  `;
+    '<details class="bloque">' +
+      "<summary>Detalles técnicos del cálculo</summary>" +
+      '<div class="tec">' +
+        "Rumbo incendio → zona: " + r.rumboFuegoZona.toFixed(1) + "° · Dirección del viento: " +
+        r.direccionVientoGrados + "° · Diferencia angular: " + r.diferenciaFirmada.toFixed(1) + "°<br>" +
+        "Cuadrante: " + r.cuadrante + " · Escenario por tiempo: " + r.escenario + "<br>" +
+        tecExtra +
+        "VPIF = " + r.v0 + " · " + r.fv + " · " + r.fp + " = " + r.vpif.toFixed(2) + " m/min · " +
+        "Tiempo = " + Math.round(r.distanciaM) + " m / " + r.vpif.toFixed(2) + " = " + r.tiempoMin.toFixed(1) + " min" +
+      "</div>" +
+    "</details>" +
+
+    '<div class="recordatorio"><strong>Recordatorio:</strong> estimación grosera y orientativa, no un modelo profesional. ' +
+      "Úsala para anticiparte, retirarte antes y preparar decisiones prudentes; nunca para apurar tiempos ni justificar " +
+      "entrar o permanecer en zonas comprometidas. Ante peligro: <strong>112</strong>.</div>";
 
   const resumen = document.getElementById("resumen");
   resumen.className = t.clase;
   resumen.style.display = "flex";
   const tiempoResumen = r.cuadrante === "sin_riesgo" ? "vigilancia" : r.tiempoTexto;
   document.getElementById("resumen-texto").textContent =
-    `${t.titulo} · ${tiempoResumen} · ${formatearMetros(r.distanciaM)}`;
+    t.titulo + " · " + tiempoResumen + " · " + formatearMetros(r.distanciaM);
+}
+
+// === EDITOR DE COORDENADAS ===
+
+function abrirEditor(tipo) {
+  estado.editor = tipo;
+  const nombre = tipo === "fuego" ? "🔥 Incendio" : "🏠 Zona vulnerable";
+  document.getElementById("editor-titulo").textContent = nombre + ":";
+  const p = estado[tipo];
+  document.getElementById("editor-input").value = p ? p.lat + ", " + p.lon : "";
+  document.getElementById("editor-msg").textContent = "";
+  document.getElementById("editor").hidden = false;
+  document.getElementById("editor-input").focus();
+}
+
+function cerrarEditor() {
+  estado.editor = null;
+  document.getElementById("editor").hidden = true;
+}
+
+function aplicarEditor() {
+  const tipo = estado.editor;
+  if (!tipo) return;
+  const texto = document.getElementById("editor-input").value;
+  const c = parsearCoordenadas(texto);
+  if (!c) {
+    document.getElementById("editor-msg").textContent =
+      "No reconozco esas coordenadas. Formato: latitud, longitud con decimales de punto (ej. 40.1290, -5.4610).";
+    return;
+  }
+  fijarPunto(tipo, { lat: c.lat, lng: c.lon });
+  map.setView([c.lat, c.lon], Math.max(map.getZoom(), 13));
+  mostrarToast((tipo === "fuego" ? "Incendio" : "Zona vulnerable") + " fijado en " + c.lat + ", " + c.lon);
+  cerrarEditor();
+}
+
+// === TOAST ===
+
+let toastTimer = null;
+function mostrarToast(texto) {
+  let el = document.getElementById("toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "toast";
+    el.className = "toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = texto;
+  el.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.classList.remove("on"); }, 3200);
+}
+
+// === GEOLOCALIZACIÓN ===
+
+function usarMiUbicacion() {
+  if (!navigator.geolocation) {
+    mostrarToast("Tu navegador no soporta geolocalización.");
+    return;
+  }
+  mostrarToast("Obteniendo tu ubicación…");
+  navigator.geolocation.getCurrentPosition(
+    function (pos) {
+      const lat = pos.coords.latitude, lon = pos.coords.longitude;
+      fijarPunto("zona", { lat: lat, lng: lon });
+      map.setView([lat, lon], Math.max(map.getZoom(), 15));
+      mostrarToast("Zona vulnerable fijada en tu ubicación (±" + Math.round(pos.coords.accuracy) + " m).");
+    },
+    function (err) {
+      const msgs = {
+        1: "Permiso de ubicación denegado. Actívalo en el navegador.",
+        2: "Ubicación no disponible ahora mismo.",
+        3: "Tiempo de espera agotado al obtener la ubicación."
+      };
+      mostrarToast(msgs[err.code] || "No se pudo obtener la ubicación.");
+    },
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+  );
 }
 
 // === INTERFAZ GENERAL ===
+
+function motivosBloqueo() {
+  const motivos = [];
+  if (!estado.fuego || !estado.zona) motivos.push("fija el incendio y la zona vulnerable en el mapa");
+  const va = estado.vientoAuto, pa = estado.penAuto;
+  if (va.activo) {
+    if (va.cargando) motivos.push("consultando viento…");
+    else if (!va.datos && estado.fuego) motivos.push("viento automático no disponible (reintenta o pasa a manual)");
+  }
+  if (pa.activo) {
+    if (pa.cargando) motivos.push("consultando elevaciones…");
+    else if (!pa.datos && estado.fuego && estado.zona) motivos.push("pendiente automática no disponible (reintenta o pasa a manual)");
+  }
+  return motivos;
+}
 
 function refrescar() {
   const f = estado.fuego, z = estado.zona;
 
   document.getElementById("coords-fuego").textContent =
-    f ? `${f.lat}, ${f.lon}` : "Sin fijar — toca el mapa";
+    f ? f.lat + ", " + f.lon : "Sin fijar — toca el mapa";
   document.getElementById("coords-zona").textContent =
-    z ? `${z.lat}, ${z.lon}` : "Sin fijar";
+    z ? z.lat + ", " + z.lon : "Sin fijar";
 
   document.getElementById("chip-fuego").classList.toggle("activo", estado.objetivo === "fuego");
   document.getElementById("chip-zona").classList.toggle("activo", estado.objetivo === "zona");
 
   const nombre = estado.objetivo === "fuego" ? "el <b>incendio</b>" : "la <b>zona vulnerable</b>";
   document.getElementById("hint").innerHTML =
-    `El próximo toque en el mapa fija ${nombre}. Arrastra los marcadores para ajustar la posición.`;
+    "El próximo toque en el mapa fija " + nombre + ". Arrastra los marcadores para ajustar; ✎ para escribir coordenadas.";
 
   if (linea) { map.removeLayer(linea); linea = null; }
   if (f && z) {
     linea = L.polyline([[f.lat, f.lon], [z.lat, z.lon]], { color: "#eab308", weight: 5 }).addTo(map);
   }
 
-  const listo = Boolean(f && z);
-  document.getElementById("btn-calcular").disabled = !listo;
+  const motivos = motivosBloqueo();
+  document.getElementById("btn-calcular").disabled = motivos.length > 0;
   const hintCalc = document.getElementById("hint-calc");
-  if (!listo) {
-    hintCalc.textContent = "Fija el incendio y la zona vulnerable en el mapa para poder calcular.";
+  if (motivos.length > 0) {
+    hintCalc.textContent = "Para calcular: " + motivos.join(" · ") + ".";
   } else if (estado.resultado === null) {
-    hintCalc.textContent = "Puntos listos. Revisa los datos si lo necesitas y pulsa Calcular alerta.";
+    hintCalc.textContent = "Todo listo. Revisa los datos si lo necesitas y pulsa Calcular alerta.";
   } else {
     hintCalc.textContent = "";
   }
 }
 
-document.getElementById("chip-fuego").addEventListener("click", () => {
+// === CONEXIÓN DE EVENTOS ===
+
+document.getElementById("chip-fuego").addEventListener("click", function () {
   estado.objetivo = "fuego"; refrescar();
 });
-document.getElementById("chip-zona").addEventListener("click", () => {
+document.getElementById("chip-zona").addEventListener("click", function () {
   estado.objetivo = "zona"; refrescar();
 });
-document.getElementById("btn-borrar").addEventListener("click", () => {
+document.getElementById("editar-fuego").addEventListener("click", function (e) {
+  e.stopPropagation(); estado.objetivo = "fuego"; refrescar(); abrirEditor("fuego");
+});
+document.getElementById("editar-zona").addEventListener("click", function (e) {
+  e.stopPropagation(); estado.objetivo = "zona"; refrescar(); abrirEditor("zona");
+});
+document.getElementById("editor-aplicar").addEventListener("click", aplicarEditor);
+document.getElementById("editor-cancelar").addEventListener("click", cerrarEditor);
+document.getElementById("editor-input").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") aplicarEditor();
+  if (e.key === "Escape") cerrarEditor();
+});
+
+document.getElementById("btn-geo").addEventListener("click", usarMiUbicacion);
+
+document.getElementById("btn-borrar").addEventListener("click", function () {
   for (const t of ["fuego", "zona"]) {
     if (marcadores[t]) { map.removeLayer(marcadores[t]); marcadores[t] = null; }
     estado[t] = null;
   }
   estado.objetivo = "fuego";
+  estado.vientoAuto.datos = null; estado.vientoAuto.error = null;
+  estado.penAuto.datos = null; estado.penAuto.error = null;
+  cerrarEditor();
   invalidarResultado();
+  renderVientoAuto();
+  renderPendienteAuto();
   refrescar();
 });
 
-document.getElementById("btn-datos").addEventListener("click", () => {
+document.getElementById("btn-datos").addEventListener("click", function () {
   document.getElementById("inputs").classList.toggle("abierto");
 });
 document.getElementById("btn-calcular").addEventListener("click", calcular);
-document.getElementById("resumen").addEventListener("click", () => {
+document.getElementById("resumen").addEventListener("click", function () {
   document.getElementById("resultado").classList.toggle("abierto");
 });
 
-// Cualquier cambio de datos invalida el resultado anterior.
-for (const id of ["in-dir", "in-vel", "in-comb", "in-pen", "in-sentido"]) {
-  document.getElementById(id).addEventListener("input", () => {
+document.getElementById("chk-viento-auto").addEventListener("change", function (e) {
+  estado.vientoAuto.activo = e.target.checked;
+  invalidarResultado();
+  actualizarVientoAuto();
+});
+document.getElementById("chk-pen-auto").addEventListener("change", function (e) {
+  estado.penAuto.activo = e.target.checked;
+  invalidarResultado();
+  actualizarPendienteAuto();
+});
+
+const IDS_ENTRADAS = ["in-dir", "in-vel", "in-comb", "in-pen", "in-sentido"];
+for (const idEntrada of IDS_ENTRADAS) {
+  document.getElementById(idEntrada).addEventListener("input", function () {
     invalidarResultado(); refrescar();
   });
 }
-document.getElementById("in-vel").addEventListener("input", (e) => {
+document.getElementById("in-vel").addEventListener("input", function (e) {
   document.getElementById("out-vel").textContent = e.target.value + " km/h";
 });
-document.getElementById("in-pen").addEventListener("input", (e) => {
+document.getElementById("in-pen").addEventListener("input", function (e) {
   document.getElementById("out-pen").textContent = e.target.value + " %";
 });
 
+renderVientoAuto();
+renderPendienteAuto();
 refrescar();
 </script>
 </body>
 </html>
-

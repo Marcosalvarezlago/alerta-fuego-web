@@ -282,7 +282,7 @@
               <select id="in-comb">
                 <option value="" selected>Selecciona…</option>
                 <option value="pastos_bajos">Pastos bajos</option>
-                <option value="quercus">Bosque de Quercus / encinar / robledal</option>
+                <option value="quercus">Bosque de quercus / encinar / robledal</option>
                 <option value="matorral_mediterraneo">Matorral mediterráneo</option>
                 <option value="pinar">Pinar</option>
               </select>
@@ -299,6 +299,16 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// =====================================================================
+// CONFIGURACIÓN OPCIONAL — servicio resolvedor de enlaces cortos
+// Pega entre las comillas la URL de tu Cloudflare Worker para que
+// funcionen los enlaces cortos de Google Maps (maps.app.goo.gl).
+// Ejemplo: window.CONFIG_RESOLVER = "https://alerta-fuego-enlaces.tuusuario.workers.dev";
+// Si se deja vacío, la app funciona igual pero pedirá la URL completa.
+// =====================================================================
+window.CONFIG_RESOLVER = "https://alerta-fuego-enlaces.marcosalvarez1w.workers.dev/";
+</script>
 <script>
 "use strict";
 // === MODELO ALERTA FUEGO (portado 1:1 desde src/modelo.py) ===
@@ -698,7 +708,7 @@ const NOMBRE_ESCENARIO = {
 
 const NOMBRE_COMBUSTIBLE = {
   pastos_bajos: "Pastos bajos",
-  quercus: "Bosque de Quercus / encinar / robledal",
+  quercus: "Bosque de quercus / encinar / robledal",
   matorral_mediterraneo: "Matorral mediterráneo",
   pinar: "Pinar"
 };
@@ -911,7 +921,7 @@ function renderPendienteAuto() {
       "<div class='mini-nota'>Elevación incendio " + Math.round(d.elevFuegoM) + " m · zona " +
       Math.round(d.elevZonaM) + " m · desnivel " + signo + Math.round(d.desnivelM) + " m. " +
       "Estimación provisional con solo los dos puntos extremos. " +
-      "(Fuente: Open-Meteo, elevación)</div>";
+      "(Fuente: Open-Meteo)</div>";
   }
 }
 
@@ -1196,14 +1206,32 @@ function cerrarEditor() {
   document.getElementById("editor").hidden = true;
 }
 
-function aplicarEditor() {
+const RESOLVER_URL = (window.CONFIG_RESOLVER || "").replace(/\/+$/, "");
+
+async function aplicarEditor() {
   const tipo = estado.editor;
   if (!tipo) return;
   const texto = document.getElementById("editor-input").value;
-  const r = parsearUbicacion(texto);
+  let r = parsearUbicacion(texto);
+
+  // Enlace corto: intentar resolverlo con el servicio propio, si está configurado
+  if (!r.ok && r.motivo === "enlace_corto" && RESOLVER_URL) {
+    const enlace = (texto.match(/https?:\/\/\S+/) || [""])[0];
+    document.getElementById("editor-msg").textContent = "Resolviendo enlace corto…";
+    try {
+      const resp = await fetchJson(RESOLVER_URL + "/resolver?url=" + encodeURIComponent(enlace));
+      if (resp && resp.url_final) r = parsearUbicacion(resp.url_final);
+    } catch (e) {
+      // se mantiene r con motivo enlace_corto y cae al mensaje estándar
+    }
+    if (estado.editor !== tipo) return; // el usuario cerró o cambió mientras tanto
+  }
+
   if (!r.ok) {
     const mensajes = {
-      enlace_corto: "Los enlaces cortos de Google Maps no incluyen coordenadas. Abre el enlace en el navegador y copia la URL completa de la barra de direcciones, o pega las coordenadas directamente.",
+      enlace_corto: RESOLVER_URL
+        ? "No se pudo resolver el enlace corto (servicio no disponible). Abre el enlace en el navegador y copia la URL completa, o pega las coordenadas directamente."
+        : "Los enlaces cortos de Google Maps no incluyen coordenadas. Abre el enlace en el navegador y copia la URL completa de la barra de direcciones, o pega las coordenadas directamente.",
       utm: "Ese enlace del IGN usa coordenadas UTM. En el visor Iberpix, copia latitud y longitud del panel de coordenadas y pégalas aquí (ej. 40.1290, -5.4610).",
       formato: "No reconozco esa ubicación. Pega coordenadas (ej. 40.1290, -5.4610) o un enlace completo de Google Maps."
     };

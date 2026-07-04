@@ -41,7 +41,18 @@ export default {
 
       try {
         const respuesta = await fetch(destino, { redirect: "follow" });
-        return json({ url_final: respuesta.url });
+        let urlFinal = respuesta.url;
+
+        // Si Google interpone su CAPTCHA (/sorry), la URL real de Maps
+        // viaja dentro del parámetro continue: la extraemos.
+        if (urlFinal.includes("/sorry/")) {
+          const cont = urlFinal.match(/[?&]continue=([^&]+)/);
+          if (cont) {
+            try { urlFinal = decodeURIComponent(cont[1]); } catch (e) { /* dejar tal cual */ }
+          }
+        }
+
+        return json({ url_final: urlFinal });
       } catch (e) {
         return json({ error: "no se pudo resolver el enlace" }, 502);
       }

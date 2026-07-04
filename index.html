@@ -798,17 +798,41 @@ function clavePendiente(f, z) {
   return [f.lat.toFixed(4), f.lon.toFixed(4), z.lat.toFixed(4), z.lon.toFixed(4)].join(",");
 }
 
+async function consultarElevacionesIGN(f, z) {
+  const url = RESOLVER_URL + "/elevaciones?lats=" + f.lat + "," + z.lat +
+    "&lons=" + f.lon + "," + z.lon;
+  const j = await fetchJson(url);
+  if (!j.elevaciones || j.elevaciones.length !== 2) throw new Error("respuesta IGN inválida");
+  return { elevaciones: j.elevaciones, fuente: "IGN, MDT oficial" };
+}
+
+async function consultarElevacionesOpenMeteo(f, z) {
+  const url = "https://api.open-meteo.com/v1/elevation?latitude=" + f.lat + "," + z.lat +
+    "&longitude=" + f.lon + "," + z.lon;
+  const j = await fetchJson(url);
+  if (!j.elevation || j.elevation.length !== 2) throw new Error("respuesta sin elevaciones");
+  return { elevaciones: j.elevation, fuente: "Open-Meteo" };
+}
+
 async function obtenerPendienteCacheada(f, z) {
   const clave = clavePendiente(f, z);
   const e = cachePendiente.get(clave); // la elevación del terreno no caduca
   if (e) return e;
 
-  const url = "https://api.open-meteo.com/v1/elevation?latitude=" + f.lat + "," + z.lat +
-    "&longitude=" + f.lon + "," + z.lon;
-  const j = await fetchJson(url);
-  if (!j.elevation || j.elevation.length !== 2) throw new Error("Respuesta sin elevaciones");
+  // Cadena de fuentes: primero IGN (más preciso) si hay servicio configurado;
+  // si falla, Open-Meteo. Nunca en silencio: la fuente usada se muestra siempre.
+  let datos;
+  if (RESOLVER_URL) {
+    try {
+      datos = await consultarElevacionesIGN(f, z);
+    } catch (err) {
+      datos = await consultarElevacionesOpenMeteo(f, z);
+    }
+  } else {
+    datos = await consultarElevacionesOpenMeteo(f, z);
+  }
 
-  const elevF = j.elevation[0], elevZ = j.elevation[1];
+  const elevF = datos.elevaciones[0], elevZ = datos.elevaciones[1];
   const distanciaM = calcularDistanciaM(f.lat, f.lon, z.lat, z.lon);
   const p = calcularPendienteDesdeElevaciones(elevF, elevZ, distanciaM);
   const d = {
@@ -818,7 +842,7 @@ async function obtenerPendienteCacheada(f, z) {
     elevFuegoM: elevF,
     elevZonaM: elevZ,
     distanciaM: distanciaM,
-    fuente: "Open-Meteo elevación (provisional)"
+    fuente: datos.fuente
   };
   cachePendiente.set(clave, d);
   return d;
@@ -937,7 +961,7 @@ function renderPendienteAuto() {
       "<div class='mini-nota'>Elevación incendio " + Math.round(d.elevFuegoM) + " m · zona " +
       Math.round(d.elevZonaM) + " m · desnivel " + signo + Math.round(d.desnivelM) + " m. " +
       "Estimación provisional con solo los dos puntos extremos. " +
-      "(Fuente: Open-Meteo)</div>";
+      "(Fuente: " + d.fuente + ")</div>";
   }
 }
 
@@ -1059,7 +1083,7 @@ function leerEntradas() {
     ? {
         pendientePct: Math.round(pa.datos.pendientePct),
         sentidoLadera: pa.datos.sentidoLadera,
-        fuentePendiente: "Open-Meteo elevación, provisional"
+        fuentePendiente: pa.datos.fuente + ", provisional"
       }
     : {
         pendientePct: +document.getElementById("in-pen").value,

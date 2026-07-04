@@ -307,7 +307,7 @@
 // Ejemplo: window.CONFIG_RESOLVER = "https://alerta-fuego-enlaces.tuusuario.workers.dev";
 // Si se deja vacío, la app funciona igual pero pedirá la URL completa.
 // =====================================================================
-window.CONFIG_RESOLVER = "https://alerta-fuego-enlaces.marcosalvarez1w.workers.dev";
+window.CONFIG_RESOLVER = "";
 </script>
 <script>
 "use strict";
@@ -526,6 +526,22 @@ function parsearUbicacion(texto) {
   const NUM = "(-?\\d+(?:\\.\\d+)?)";
 
   if (esUrl) {
+    // 0) Página /sorry (CAPTCHA de Google): la coordenada viaja dentro de continue=
+    const cont = t.match(/[?&]continue=([^&]+)/);
+    if (cont) {
+      let interno = cont[1];
+      try { interno = decodeURIComponent(interno); } catch (e) { /* seguir */ }
+      const r = parsearUbicacion(interno);
+      if (r.ok) return r;
+    }
+
+    // 0b) Google Maps: /maps/search/lat,lon  o  /search/?query=lat,lon
+    let ms = t.match(new RegExp("/maps/search/" + NUM + "\\s*,\\s*\\+?\\s*" + NUM));
+    if (ms) {
+      const lat = parseFloat(ms[1]), lon = parseFloat(ms[2]);
+      if (latLonValidos(lat, lon)) return { ok: true, lat, lon };
+    }
+
     // 1) Google Maps: @lat,lon
     let m = t.match(new RegExp("@\\s*" + NUM + "\\s*,\\s*" + NUM));
     if (m) {

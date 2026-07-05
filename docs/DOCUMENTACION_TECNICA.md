@@ -1,6 +1,6 @@
 # Alerta Fuego — Documentación técnica
 
-*Estado: demo funcional para validación. Última revisión alineada con el `index.html` de fase 4.*
+*Estado: demo funcional para validación externa. IGN y SIGPAC integrados. Última revisión alineada con el `index.html` final.*
 
 ---
 
@@ -26,7 +26,11 @@ Principio rector: **no transmitir falsa precisión ni falsa seguridad**. Ante du
 - **Open-Meteo**: viento actual (`/v1/forecast`, `wind_speed_10m` + `wind_direction_10m`) y elevación (`/v1/elevation`). Sin clave de API. Permite CORS.
 
 **Infraestructura propia:**
-- **Cloudflare Worker** (`worker.js`): microservicio que resuelve enlaces cortos de Google Maps (`maps.app.goo.gl`), que no contienen coordenadas y no se pueden resolver desde una web estática por política CORS de Google. Incluye lista blanca de dominios para no actuar como proxy abierto. Plan gratuito (100.000 peticiones/día; el uso previsto es ínfimo frente a ese límite).
+- **Cloudflare Worker** (`worker.js`): microservicio intermedio, necesario porque una web estática no puede llamar directamente a ciertos servicios oficiales (política CORS). Tres endpoints:
+  - `/resolver`: resuelve enlaces cortos de Google Maps (`maps.app.goo.gl`), que no contienen coordenadas. Lista blanca de dominios para no actuar como proxy abierto. Contempla el caso en que Google interpone su página de verificación (`/sorry`) y extrae la coordenada del parámetro `continue`.
+  - `/elevaciones`: pendiente de precisión vía IGN (ver §5).
+  - `/sigpac`: uso del suelo vía SIGPAC (ver §5).
+  - Plan gratuito (100.000 peticiones/día; el uso previsto por persona es de unas pocas peticiones puntuales, muy por debajo del límite).
 
 **Despliegue:** GitHub Pages (rama `main`, raíz). El worker se despliega aparte en Cloudflare.
 
@@ -88,8 +92,13 @@ Estas decisiones son deliberadas y no deben revertirse sin considerar su motivo:
 
 ## 5. Datos automáticos: estado y límites
 
-- **Viento (Open-Meteo):** operativo. Conversión verificada de dirección meteorológica "desde" a dirección operativa "hacia" (+180°). Resolución del modelo (1–11 km): entre puntos a distancia operativa el viento apenas varía, por lo que consultarlo en el punto del incendio es una convención correcta, no una simplificación problemática.
-- **Pendiente (Open-Meteo elevación):** operativo pero **provisional**. Usa solo la altitud de los dos puntos extremos (~90 m de resolución), no un perfil. Etiquetado como provisional en la interfaz.
+- **Viento (Open-Meteo):** operativo. Conversión verificada de dirección meteorológica "desde" a dirección operativa "hacia" (+180°). Resolución del modelo (1–11 km): entre puntos a distancia operativa el viento apenas varía, por lo que consultarlo en el punto del incendio es una convención correcta, no una simplificación problemática. La mejora futura real en este dato no es espacial sino **temporal** (pronóstico horario integrado en un modelo por tramos); ver §9.
+
+- **Pendiente (IGN, con reserva a Open-Meteo):** operativo. Consulta el Modelo Digital del Terreno del IGN (resolución 5 m, servicio WCS oficial) a través del worker, que pide un recuadro mínimo alrededor de cada punto en formato ArcGrid (texto plano) y extrae el valor central. Si el IGN no responde, cae automáticamente a Open-Meteo (~90 m de resolución) **con la fuente indicada de forma explícita** en la interfaz y en el resultado: nunca un descenso silencioso. En ambos casos el método sigue siendo el de dos puntos extremos (no un perfil completo del recorrido); por eso se etiqueta como "provisional" independientemente de la fuente.
+
+- **Combustible (SIGPAC, sugerencia confirmable):** operativo, pero con una decisión de diseño deliberada: **SIGPAC no decide, sugiere**. Consulta el uso oficial del suelo en el punto del incendio mediante la consulta `recinfobypoint` del Servicio de Consultas SIGPAC (FEGA), y propone un combustible equivalente (tabla en `app_ui.js`, `SUGERENCIA_COMBUSTIBLE`). El combustible solo se vuelve operativo si el usuario confirma con un toque ("Usar sugerencia"); un fallo del servicio no bloquea el cálculo, porque es consultivo, no imprescindible. Casos con manejo explícito: uso sin equivalencia (se pide elección manual), uso "Forestal" (SIGPAC no distingue el tipo de arbolado: se propone pinar por prudencia, con aviso, al ser el más rápido de la tabla), sin recinto en el punto (zona urbana, etc.). Atribución obligatoria por licencia: "SIGPAC — FEGA, CC BY 4.0", visible en la tarjeta.
+
+**Nota de arquitectura sobre SIGPAC:** la ruta correcta del servicio oficial es `servicioconsultassigpac/query/recinfobypoint/[srid]/[lon]/[lat].json` (orden longitud/latitud, no lat/lon). Confirmada contra el ejemplo de la documentación oficial del FEGA antes de integrarse; varias rutas de las colecciones espaciales del catálogo (`recintos`, `cultivo_declarado`) se investigaron primero y se descartaron por no llevar el atributo de uso.
 
 ---
 
@@ -107,12 +116,14 @@ Casos con mensaje específico: enlace corto sin resolver, enlace IGN antiguo en 
 
 ## 7. Estado de pruebas
 
-Batería automatizada (ejecutada en el entorno de desarrollo con Node/JSDOM):
-- **Modelo (~48 casos):** valores de tablas, fronteras, cuadrantes en 8 rumbos, escenarios por tiempo, formato de tiempo, distancias y rumbos de control, ejemplo documental.
-- **Geometría (~7):** punto-destino, sectores, ida y vuelta.
-- **Conversiones meteo/terreno (~19):** dirección desde→hacia, cardinales, pendiente desde elevaciones.
-- **Parser de ubicaciones (~17):** todos los formatos anteriores, incluido el caso real de CAPTCHA.
-- **Interfaz completa (~49, DOM simulado):** bloqueo prudencial, caché, reintentos, editor, geolocalización, invalidación, ocultación de campos en modo automático, orden de secciones, auditoría de textos.
+Batería automatizada (ejecutada en el entorno de desarrollo con Node/JSDOM), 148 casos en total:
+- **Modelo (49 casos):** valores de tablas, fronteras, cuadrantes en 8 rumbos, escenarios por tiempo, formato de tiempo, distancias y rumbos de control, ejemplo documental.
+- **Geometría (7):** punto-destino, sectores, ida y vuelta.
+- **Conversiones meteo/terreno (19):** dirección desde→hacia, cardinales, pendiente desde elevaciones.
+- **Parser de ubicaciones (17):** coordenadas, todos los formatos de enlace de Google Maps, Mercator, CAPTCHA con `continue`, enlaces cortos y UTM del IGN detectados con mensaje específico.
+- **Parser ArcGrid del worker (6):** formato IGN con distintos finales de línea, valores NODATA, matrices de distinto tamaño.
+- **Extractor SIGPAC del worker (5):** verificado contra el ejemplo literal de la documentación oficial del FEGA.
+- **Interfaz completa (66, DOM simulado):** bloqueo prudencial, caché, reintentos, editor, geolocalización, invalidación, ocultación de campos en modo automático, orden de secciones, auditoría de textos, flujo completo de SIGPAC (sugerencia, confirmación, trazabilidad en el resultado, casos sin recinto y de error).
 
 ---
 
@@ -127,13 +138,12 @@ Batería automatizada (ejecutada en el entorno de desarrollo con Node/JSDOM):
 ## 9. Roadmap
 
 **Backlog inmediato (post-demo):**
-- Elevación IGN (MDT hasta 5 m) vía servicio WCS a través del worker. Mejora real de precisión, pero técnicamente frágil (el servicio devuelve ficheros ráster, no un valor de punto; trabaja en UTM). Su beneficio se materializa plenamente con el modelo por tramos.
+- Automatizar el despliegue del worker vía GitHub (hoy requiere actualizarlo a mano en el panel de Cloudflare y en el repositorio).
 - Documentación de usuario más visual si procede.
 
 **Backlog futuro (crowdfunding):**
-- Combustible por cartografía oficial (SIGPAC). Acceso restringido: requiere el worker como intermediario y verificación de las condiciones de uso del FEGA.
-- **Modelo por tramos**: dividir el recorrido incendio→zona en segmentos, cada uno con su pendiente (IGN), combustible (SIGPAC) y viento (incluida su variación temporal). Es un cambio de modelo: conserva la fórmula documental dentro de cada tramo, pero altera los resultados globales. Requiere aviso explícito y validación de perfiles con experiencia en incendios antes de publicarse.
-- Automatización del despliegue del worker.
+- **Modelo por tramos**: dividir el recorrido incendio→zona en segmentos, cada uno con su propia pendiente (ya disponible por IGN), combustible (ya disponible por SIGPAC) y viento (incluida su variación temporal, la mejora real pendiente en este dato). Es un cambio de modelo: conserva la fórmula documental dentro de cada tramo, pero altera los resultados globales. Requiere aviso explícito y validación de perfiles con experiencia en incendios antes de publicarse. Con IGN y SIGPAC ya integrados, este es el paso natural siguiente: la infraestructura de datos está lista, falta la lógica de segmentación.
+- Revisar periódicamente la tabla de correspondencia SIGPAC→combustible (`SUGERENCIA_COMBUSTIBLE`) con criterio de campo, especialmente el caso "Forestal" (hoy resuelto por prudencia hacia pinar, el más desfavorable).
 
 **Pospuesto (no antes de validar):**
 - Simulación dinámica de frentes, propagación no lineal, aplicación Android nativa, arquitectura de servidor pesada.

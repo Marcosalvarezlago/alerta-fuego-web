@@ -134,6 +134,44 @@ export default {
       }
     }
 
+    // ------------------- /sigpac -------------------
+    // Uso del suelo SIGPAC en un punto. Servicio oficial de Consultas SIGPAC
+    // (FEGA, Nube SIGPAC), consulta "recinfobypoint" documentada:
+    //   /servicioconsultassigpac/query/recinfobypoint/[srid]/[x]/[y].json
+    // OJO al orden: x = longitud, y = latitud. SRID 4258 (ETRS89 geográfico).
+    // Datos de alto valor bajo licencia CC BY 4.0 — atribución en la app.
+    if (url.pathname === "/sigpac") {
+      const lat = Number(url.searchParams.get("lat"));
+      const lon = Number(url.searchParams.get("lon"));
+      if (!isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        return json({ error: "coordenadas no válidas" }, 400);
+      }
+
+      const consulta = "https://sigpac-hubcloud.es/servicioconsultassigpac/query/recinfobypoint/4258/" +
+        lon + "/" + lat + ".json";
+
+      try {
+        const r = await fetchConTiempo(consulta);
+        if (!r.ok) throw new Error("SIGPAC HTTP " + r.status);
+        const recintos = await r.json();
+
+        if (!Array.isArray(recintos)) throw new Error("respuesta inesperada del servicio");
+        if (recintos.length === 0) return json({ uso: null }); // punto sin recinto SIGPAC
+
+        // Si el punto cae en un límite puede haber más de un recinto: se toma el primero.
+        const recinto = recintos[0] || {};
+        let uso = recinto.uso_sigpac;
+        if (uso === undefined) {
+          for (const clave of Object.keys(recinto)) {
+            if (/uso/i.test(clave)) { uso = recinto[clave]; break; }
+          }
+        }
+        return json({ uso: uso || null });
+      } catch (e) {
+        return json({ error: "SIGPAC no disponible: " + e.message }, 502);
+      }
+    }
+
     return json({ error: "ruta desconocida" }, 404);
   }
 };

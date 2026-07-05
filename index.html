@@ -286,8 +286,10 @@
                 <option value="matorral_mediterraneo">Matorral mediterráneo</option>
                 <option value="pinar">Pinar</option>
               </select>
+              <button class="btn mini" id="btn-sigpac" type="button" hidden>Consultar uso del terreno (SIGPAC)</button>
             </div>
           </div>
+          <div id="sigpac-card" class="auto-card" hidden></div>
         </div>
 
       </div>
@@ -307,7 +309,7 @@
 // Ejemplo: window.CONFIG_RESOLVER = "https://alerta-fuego-enlaces.tuusuario.workers.dev";
 // Si se deja vacío, la app funciona igual pero pedirá la URL completa.
 // =====================================================================
-window.CONFIG_RESOLVER = "https://alerta-fuego-enlaces.marcosalvarez1w.workers.dev";
+window.CONFIG_RESOLVER = "";
 </script>
 <script>
 "use strict";
@@ -707,6 +709,22 @@ const TEXTO_CUADRANTE = {
   }
 };
 
+const USO_SIGPAC_NOMBRE = {
+  TA: "Tierra arable", TH: "Huerta", PS: "Pastizal", PR: "Pasto arbustivo",
+  PA: "Pasto con arbolado", FO: "Forestal", OV: "Olivar", VI: "Viñedo",
+  FY: "Frutal", FS: "Frutos secos", CI: "Cítricos", IV: "Invernadero",
+  ED: "Edificación", CA: "Vial", AG: "Aguas", IM: "Improductivo", ZU: "Zona urbana"
+};
+
+// SIGPAC solo SUGIERE: el combustible operativo lo confirma el usuario.
+const SUGERENCIA_COMBUSTIBLE = {
+  PS: { valor: "pastos_bajos", aviso: null },
+  TA: { valor: "pastos_bajos", aviso: "Cultivo herbáceo: se propone pastos bajos." },
+  PR: { valor: "matorral_mediterraneo", aviso: null },
+  PA: { valor: "quercus", aviso: "Pasto con arbolado (dehesa): se propone quercus." },
+  FO: { valor: "pinar", aviso: "SIGPAC no distingue el tipo de arbolado: por prudencia se propone pinar, el más rápido. Ajusta si conoces el terreno." }
+};
+
 const NOMBRE_CUADRANTE = {
   riesgo: "riesgo",
   alerta_derecha: "alerta (lado derecho)",
@@ -744,7 +762,9 @@ const estado = {
   editor: null,
   // Marca si el usuario ha tocado los sliders manuales (sin valor operativo hasta entonces)
   velElegida: false,
-  penElegida: false
+  penElegida: false,
+  sigpac: { cargando: false, datos: null, error: null },
+  combPorSigpac: false
 };
 
 // === CONSULTAS A OPEN-METEO (con caché y control de tiempo) ===
@@ -846,6 +866,97 @@ async function obtenerPendienteCacheada(f, z) {
   };
   cachePendiente.set(clave, d);
   return d;
+}
+
+// SIGPAC: activo. Usa la consulta oficial "recinfobypoint" del Servicio de
+// Consultas SIGPAC (FEGA), confirmada con su documentación. Ver worker.js.
+const SIGPAC_DISPONIBLE = true;
+
+const cacheSigpac = new Map();
+function claveSigpac(p) { return p.lat.toFixed(4) + "," + p.lon.toFixed(4); }
+
+let tokenSigpac = 0;
+async function consultarSigpac() {
+  const sg = estado.sigpac;
+  if (!estado.fuego || !RESOLVER_URL) return;
+
+  const clave = claveSigpac(estado.fuego);
+  const enCache = cacheSigpac.get(clave);
+  if (enCache) {
+    sg.datos = enCache; sg.error = null; sg.cargando = false;
+    renderSigpac(); return;
+  }
+
+  const token = ++tokenSigpac;
+  sg.cargando = true; sg.error = null; sg.datos = null;
+  renderSigpac();
+  try {
+    const j = await fetchJson(RESOLVER_URL + "/sigpac?lat=" + estado.fuego.lat + "&lon=" + estado.fuego.lon);
+    if (token !== tokenSigpac) return;
+    sg.datos = { uso: j.uso };
+    cacheSigpac.set(clave, sg.datos);
+  } catch (err) {
+    if (token !== tokenSigpac) return;
+    sg.error = "No se pudo consultar SIGPAC ahora mismo.";
+  }
+  sg.cargando = false;
+  renderSigpac();
+}
+
+function renderSigpac() {
+  const sg = estado.sigpac;
+  const boton = document.getElementById("btn-sigpac");
+  const card = document.getElementById("sigpac-card");
+
+  boton.hidden = !RESOLVER_URL || !SIGPAC_DISPONIBLE;
+  boton.disabled = !estado.fuego;
+  boton.title = estado.fuego ? "" : "Fija primero el punto del incendio";
+
+  const hayContenido = sg.cargando || sg.error || sg.datos;
+  card.hidden = !hayContenido;
+  if (!hayContenido) return;
+
+  if (sg.cargando) {
+    card.innerHTML = "Consultando uso del suelo en SIGPAC…";
+    return;
+  }
+  if (sg.error) {
+    card.innerHTML = "<span class='err'>" + sg.error + "</span>" +
+      "<div class='mini-nota'>La consulta es solo orientativa: el combustible se elige manualmente igual.</div>" +
+      "<button class='btn mini' id='btn-sigpac-retry' type='button'>Reintentar</button>";
+    document.getElementById("btn-sigpac-retry").addEventListener("click", consultarSigpac);
+    return;
+  }
+
+  const uso = sg.datos.uso;
+  const atribucion = "<div class='mini-nota'>Uso del suelo en el punto del incendio. (Fuente: SIGPAC — FEGA, CC BY 4.0)</div>";
+
+  if (!uso) {
+    card.innerHTML = "No hay recinto SIGPAC en ese punto (por ejemplo, zona urbana o sin cobertura)." + atribucion;
+    return;
+  }
+
+  const nombre = USO_SIGPAC_NOMBRE[uso] || uso;
+  const sug = SUGERENCIA_COMBUSTIBLE[uso];
+
+  if (!sug) {
+    card.innerHTML = "Uso del suelo: <b>" + nombre + " (" + uso + ")</b>. " +
+      "Sin equivalencia directa con los combustibles del modelo: elige manualmente." + atribucion;
+    return;
+  }
+
+  card.innerHTML = "Uso del suelo: <b>" + nombre + " (" + uso + ")</b>. " +
+    "Sugerencia: <b>" + NOMBRE_COMBUSTIBLE[sug.valor] + "</b>." +
+    (sug.aviso ? "<div class='mini-nota'>" + sug.aviso + "</div>" : "") +
+    atribucion +
+    "<button class='btn mini' id='btn-sigpac-usar' type='button'>Usar sugerencia</button>";
+  document.getElementById("btn-sigpac-usar").addEventListener("click", function () {
+    document.getElementById("in-comb").value = sug.valor;
+    estado.combPorSigpac = true;
+    invalidarResultado();
+    refrescar();
+    mostrarToast("Combustible fijado: " + NOMBRE_COMBUSTIBLE[sug.valor] + " (sugerido por SIGPAC)");
+  });
 }
 
 // === ACTUALIZACIÓN DE DATOS AUTOMÁTICOS (con protección contra respuestas tardías) ===
@@ -998,6 +1109,10 @@ function alCambiarPunto(tipo) {
   invalidarResultado();
   if (tipo === "fuego" && estado.vientoAuto.activo) actualizarVientoAuto();
   if (estado.penAuto.activo) actualizarPendienteAuto();
+  if (tipo === "fuego") {
+    estado.sigpac.datos = null; estado.sigpac.error = null; estado.sigpac.cargando = false;
+    renderSigpac();
+  }
   refrescar();
 }
 
@@ -1099,7 +1214,7 @@ function leerEntradas() {
     sentidoLadera: pendiente.sentidoLadera,
     fuentePendiente: pendiente.fuentePendiente,
     tipoCombustible: document.getElementById("in-comb").value,
-    fuenteCombustible: "manual"
+    fuenteCombustible: estado.combPorSigpac ? "manual, sugerido por SIGPAC" : "manual"
   };
 }
 
@@ -1414,6 +1529,10 @@ document.getElementById("editor-input").addEventListener("keydown", function (e)
 });
 
 document.getElementById("btn-geo").addEventListener("click", usarMiUbicacion);
+document.getElementById("btn-sigpac").addEventListener("click", consultarSigpac);
+document.getElementById("in-comb").addEventListener("change", function () {
+  estado.combPorSigpac = false;
+});
 
 document.getElementById("btn-borrar").addEventListener("click", function () {
   for (const t of ["fuego", "zona"]) {
@@ -1424,6 +1543,8 @@ document.getElementById("btn-borrar").addEventListener("click", function () {
   estado.vientoAuto.datos = null; estado.vientoAuto.error = null;
   estado.penAuto.datos = null; estado.penAuto.error = null;
   estado.velElegida = false; estado.penElegida = false;
+  estado.sigpac.datos = null; estado.sigpac.error = null; estado.sigpac.cargando = false;
+  estado.combPorSigpac = false;
   document.getElementById("wrap-vel").classList.add("sin-elegir");
   document.getElementById("wrap-pen").classList.add("sin-elegir");
   document.getElementById("out-vel").textContent = "sin elegir";
@@ -1435,6 +1556,7 @@ document.getElementById("btn-borrar").addEventListener("click", function () {
   invalidarResultado();
   renderVientoAuto();
   renderPendienteAuto();
+  renderSigpac();
   refrescar();
 });
 
@@ -1493,6 +1615,7 @@ document.getElementById("in-pen").addEventListener("input", function (e) {
 
 renderVientoAuto();
 renderPendienteAuto();
+renderSigpac();
 refrescar();
 </script>
 </body>

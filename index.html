@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Alerta Fuego — demo experimental</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
 <style>
   :root{
     --rojo:#dc2626; --rojo-suave:#fee2e2;
@@ -300,7 +301,8 @@
 
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script>
 // =====================================================================
 // CONFIGURACIÓN OPCIONAL — servicio resolvedor de enlaces cortos
@@ -311,298 +313,12 @@
 // =====================================================================
 window.CONFIG_RESOLVER = "https://alerta-fuego-enlaces.marcosalvarez1w.workers.dev";
 </script>
-<script>
+<script type="module">
+import * as Core from "./src/core.js";
+
 "use strict";
-// === MODELO ALERTA FUEGO (portado 1:1 desde src/modelo.py) ===
-// VPIF = V0 · FV · FP ; Tiempo = distancia / VPIF
-// No modificar valores sin aviso explícito: modelo documental del grupo.
+// Modelo, geometría, conversiones y parser: fuente única comprobable en src/core.js.
 
-const DIRECCIONES_GRADOS = {
-  N: 0, NE: 45, E: 90, SE: 135, S: 180, SO: 225, O: 270, NO: 315
-};
-
-const V0_COMBUSTIBLE = {
-  pastos_bajos: 3,
-  quercus: 4,
-  matorral_mediterraneo: 6,
-  pinar: 8
-};
-
-function calcularDistanciaM(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const toRad = (g) => g * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function calcularRumboGrados(lat1, lon1, lat2, lon2) {
-  const toRad = (g) => g * Math.PI / 180;
-  const y = Math.sin(toRad(lon2 - lon1)) * Math.cos(toRad(lat2));
-  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
-    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
-  const rumbo = Math.atan2(y, x) * 180 / Math.PI;
-  return (rumbo + 360) % 360;
-}
-
-function diferenciaAngularFirmada(a, b) {
-  // Diferencia b−a normalizada a [−180, 180]
-  let d = (b - a) % 360;
-  if (d > 180) d -= 360;
-  if (d < -180) d += 360;
-  return d;
-}
-
-function clasificarCuadrante(direccionVientoGrados, rumboFuegoZonaGrados) {
-  const d = diferenciaAngularFirmada(direccionVientoGrados, rumboFuegoZonaGrados);
-  const abs = Math.abs(d);
-  if (abs <= 45) return { cuadrante: "riesgo", diferencia: d };
-  if (abs <= 135) {
-    return { cuadrante: d > 0 ? "alerta_derecha" : "alerta_izquierda", diferencia: d };
-  }
-  return { cuadrante: "sin_riesgo", diferencia: d };
-}
-
-function obtenerFactorViento(vKmh) {
-  if (vKmh < 10) return 1;
-  if (vKmh < 20) return 1.5;
-  if (vKmh < 30) return 2;
-  return 3;
-}
-
-function obtenerFactorPendiente(pendientePct, sentidoLadera) {
-  if (sentidoLadera === "bajando") return 0.7;
-  if (sentidoLadera === "llano") return 1;
-  if (pendientePct < 20) return 1;
-  if (pendientePct <= 40) return 1.5;
-  return 2;
-}
-
-function formatearTiempo(tiempoMin) {
-  if (tiempoMin === null || !isFinite(tiempoMin)) return "indeterminado";
-  const horas = Math.floor(tiempoMin / 60);
-  const minutos = Math.round(tiempoMin % 60);
-  if (horas === 0) return `${minutos} min`;
-  return `${horas} h ${minutos} min`;
-}
-
-function clasificarEscenario(tiempoMin) {
-  if (tiempoMin === null || !isFinite(tiempoMin)) return "indeterminado";
-  if (tiempoMin <= 30) return "30_min";
-  if (tiempoMin <= 60) return "1_hora";
-  if (tiempoMin <= 90) return "1_hora_y_media";
-  return "vigilancia_preventiva";
-}
-
-function evaluarAlertaFuego(p) {
-  const distanciaM = calcularDistanciaM(p.latFuego, p.lonFuego, p.latZona, p.lonZona);
-  const rumbo = calcularRumboGrados(p.latFuego, p.lonFuego, p.latZona, p.lonZona);
-  const dirViento = DIRECCIONES_GRADOS[p.direccionVientoHacia];
-  const cls = clasificarCuadrante(dirViento, rumbo);
-
-  const v0 = V0_COMBUSTIBLE[p.tipoCombustible];
-  const fv = obtenerFactorViento(p.velocidadVientoKmh);
-  const fp = obtenerFactorPendiente(p.pendientePct, p.sentidoLadera);
-  const vpif = v0 * fv * fp;
-
-  const tiempoMin = vpif > 0 ? distanciaM / vpif : null;
-
-  return {
-    distanciaM,
-    rumboFuegoZona: rumbo,
-    direccionVientoGrados: dirViento,
-    diferenciaFirmada: cls.diferencia,
-    cuadrante: cls.cuadrante,
-    v0, fv, fp, vpif,
-    tiempoMin,
-    tiempoTexto: formatearTiempo(tiempoMin),
-    escenario: clasificarEscenario(tiempoMin)
-  };
-}
-// === FIN MODELO ===
-
-if (typeof module !== "undefined") {
-  module.exports = {
-    DIRECCIONES_GRADOS, V0_COMBUSTIBLE,
-    calcularDistanciaM, calcularRumboGrados, diferenciaAngularFirmada,
-    clasificarCuadrante, obtenerFactorViento, obtenerFactorPendiente,
-    formatearTiempo, clasificarEscenario, evaluarAlertaFuego
-  };
-}
-// === GEOMETRÍA DE CUADRANTES ===
-
-function puntoDesdeOrigen(lat, lon, rumboGrados, distanciaM) {
-  const R = 6371000;
-  const toRad = (g) => g * Math.PI / 180;
-  const toDeg = (r) => r * 180 / Math.PI;
-  const br = toRad(rumboGrados);
-  const la1 = toRad(lat);
-  const lo1 = toRad(lon);
-  const dR = distanciaM / R;
-
-  const la2 = Math.asin(
-    Math.sin(la1) * Math.cos(dR) +
-    Math.cos(la1) * Math.sin(dR) * Math.cos(br)
-  );
-  const lo2 = lo1 + Math.atan2(
-    Math.sin(br) * Math.sin(dR) * Math.cos(la1),
-    Math.cos(dR) - Math.sin(la1) * Math.sin(la2)
-  );
-  return [toDeg(la2), toDeg(lo2)];
-}
-
-function crearSectorLatLng(lat, lon, direccionCentral, aperturaGrados, radioM, pasos = 28) {
-  const ini = direccionCentral - aperturaGrados / 2;
-  const fin = direccionCentral + aperturaGrados / 2;
-  const puntos = [[lat, lon]];
-  for (let i = 0; i <= pasos; i++) {
-    const ang = ini + (fin - ini) * i / pasos;
-    puntos.push(puntoDesdeOrigen(lat, lon, ang, radioM));
-  }
-  puntos.push([lat, lon]);
-  return puntos;
-}
-// === FIN GEOMETRÍA ===
-
-if (typeof module !== "undefined") {
-  module.exports = { puntoDesdeOrigen, crearSectorLatLng };
-}
-// === CONVERSIONES METEO Y TERRENO (puras, verificadas) ===
-
-const CARDINALES = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"];
-
-// La API meteorológica da la dirección DESDE la que sopla el viento.
-// El modelo usa la dirección HACIA la que empuja el fuego: +180°.
-function direccionHaciaDesdeMeteo(desdeGrados) {
-  return (desdeGrados + 180) % 360;
-}
-
-function gradosACardinal(grados) {
-  const g = ((grados % 360) + 360) % 360;
-  return CARDINALES[Math.round(g / 45) % 8];
-}
-
-// Pendiente provisional entre los dos puntos extremos.
-// Umbral de 5 m de desnivel para considerar "llano" (criterio original).
-function calcularPendienteDesdeElevaciones(elevFuegoM, elevZonaM, distanciaM, umbralLlanoM = 5) {
-  const desnivelM = elevZonaM - elevFuegoM;
-  let pendientePct = distanciaM > 0 ? Math.abs(desnivelM) / distanciaM * 100 : 0;
-  pendientePct = Math.max(0, Math.min(100, pendientePct));
-  const sentidoLadera =
-    Math.abs(desnivelM) < umbralLlanoM ? "llano" : (desnivelM > 0 ? "subiendo" : "bajando");
-  return { desnivelM, pendientePct, sentidoLadera };
-}
-// === FIN CONVERSIONES ===
-
-if (typeof module !== "undefined") {
-  module.exports = { CARDINALES, direccionHaciaDesdeMeteo, gradosACardinal, calcularPendienteDesdeElevaciones };
-}
-// === PARSER DE UBICACIONES: coordenadas y enlaces de mapas ===
-// Devuelve {ok:true, lat, lon} o {ok:false, motivo} con motivo:
-//  "enlace_corto" (maps.app.goo.gl sin coordenadas),
-//  "utm" (enlace IGN antiguo con coordenadas UTM),
-//  "formato" (no se reconoce nada).
-// Evita el fallo típico de tomar zoom, fechas o ids como coordenadas:
-// en URLs solo se aceptan patrones fuertes.
-
-function latLonValidos(lat, lon) {
-  return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
-}
-
-// Conversión Web Mercator (EPSG:3857, metros) -> WGS84 grados.
-function mercatorAWgs84(x, y) {
-  const R = 6378137;
-  const lon = x / R * 180 / Math.PI;
-  const lat = (2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * 180 / Math.PI;
-  return { lat, lon };
-}
-
-function parsearUbicacion(texto) {
-  if (!texto) return { ok: false, motivo: "formato" };
-  let t = String(texto).trim();
-  try { t = decodeURIComponent(t); } catch (e) { /* texto con % suelto: seguir tal cual */ }
-
-  const esUrl = /https?:\/\//.test(t);
-  const NUM = "(-?\\d+(?:\\.\\d+)?)";
-
-  if (esUrl) {
-    // 0) Página /sorry (CAPTCHA de Google): la coordenada viaja dentro de continue=
-    const cont = t.match(/[?&]continue=([^&]+)/);
-    if (cont) {
-      let interno = cont[1];
-      try { interno = decodeURIComponent(interno); } catch (e) { /* seguir */ }
-      const r = parsearUbicacion(interno);
-      if (r.ok) return r;
-    }
-
-    // 0b) Google Maps: /maps/search/lat,lon  o  /search/?query=lat,lon
-    let ms = t.match(new RegExp("/maps/search/" + NUM + "\\s*,\\s*\\+?\\s*" + NUM));
-    if (ms) {
-      const lat = parseFloat(ms[1]), lon = parseFloat(ms[2]);
-      if (latLonValidos(lat, lon)) return { ok: true, lat, lon };
-    }
-
-    // 1) Google Maps: @lat,lon
-    let m = t.match(new RegExp("@\\s*" + NUM + "\\s*,\\s*" + NUM));
-    if (m) {
-      const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
-      if (latLonValidos(lat, lon)) return { ok: true, lat, lon };
-    }
-    // 2) Google Maps: !3dLAT!4dLON
-    m = t.match(new RegExp("!3d" + NUM + "!4d" + NUM));
-    if (m) {
-      const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
-      if (latLonValidos(lat, lon)) return { ok: true, lat, lon };
-    }
-    // 3) Google Maps: !2dLON!3dLAT
-    m = t.match(new RegExp("!2d" + NUM + "!3d" + NUM));
-    if (m) {
-      const lon = parseFloat(m[1]), lat = parseFloat(m[2]);
-      if (latLonValidos(lat, lon)) return { ok: true, lat, lon };
-    }
-    // 4) Parámetros de consulta: q, ll, query, center, destination, origin, daddr, saddr
-    const CLAVES = ["q", "ll", "query", "center", "destination", "origin", "daddr", "saddr"];
-    for (const clave of CLAVES) {
-      const re = new RegExp("[?&#]" + clave + "=" + NUM + "\\s*,\\s*" + NUM);
-      const p = t.match(re);
-      if (p) {
-        const a = parseFloat(p[1]), b = parseFloat(p[2]);
-        if (latLonValidos(a, b)) return { ok: true, lat: a, lon: b };
-        // Valores enormes: coordenadas Web Mercator (visores tipo Iberpix moderno)
-        if (Math.abs(a) > 180 || Math.abs(b) > 90) {
-          const c = mercatorAWgs84(a, b);
-          if (latLonValidos(c.lat, c.lon)) {
-            return { ok: true, lat: +c.lat.toFixed(6), lon: +c.lon.toFixed(6) };
-          }
-        }
-      }
-    }
-    // 5) Enlace IGN antiguo con UTM: x=...&y=...&srid=258xx
-    if (/[?&]x=-?\d/.test(t) && /[?&]y=-?\d/.test(t) && /srid=258\d\d/.test(t)) {
-      return { ok: false, motivo: "utm" };
-    }
-    // 6) Enlace corto de Google sin coordenadas en la URL
-    if (/maps\.app\.goo\.gl|goo\.gl\/maps/.test(t)) {
-      return { ok: false, motivo: "enlace_corto" };
-    }
-    return { ok: false, motivo: "formato" };
-  }
-
-  // Texto simple: "lat, lon" con coma, punto y coma o espacios (decimales con punto)
-  const m = t.match(new RegExp("^" + NUM + "[\\s,;]+" + NUM + "$"));
-  if (m) {
-    const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
-    if (latLonValidos(lat, lon)) return { ok: true, lat, lon };
-  }
-  return { ok: false, motivo: "formato" };
-}
-// === FIN PARSER ===
-
-if (typeof module !== "undefined") {
-  module.exports = { parsearUbicacion, mercatorAWgs84 };
-}
 // === TEXTOS DEL PROTOCOLO (documento Alerta Fuego) ===
 
 const PROTOCOLOS = {
@@ -710,20 +426,16 @@ const TEXTO_CUADRANTE = {
 };
 
 const USO_SIGPAC_NOMBRE = {
-  TA: "Tierra arable", TH: "Huerta", PS: "Pastizal", PR: "Pasto arbustivo",
+  TA: "Tierra arable", TH: "Huerta", PS: "Pastizal", PR: "Pasto arbustivo", MT: "Matorral",
   PA: "Pasto con arbolado", FO: "Forestal", OV: "Olivar", VI: "Viñedo",
   FY: "Frutal", FS: "Frutos secos", CI: "Cítricos", IV: "Invernadero",
   ED: "Edificación", CA: "Vial", AG: "Aguas", IM: "Improductivo", ZU: "Zona urbana"
 };
 
 // SIGPAC solo SUGIERE: el combustible operativo lo confirma el usuario.
-const SUGERENCIA_COMBUSTIBLE = {
-  PS: { valor: "pastos_bajos", aviso: null },
-  TA: { valor: "pastos_bajos", aviso: "Cultivo herbáceo: se propone pastos bajos." },
-  PR: { valor: "matorral_mediterraneo", aviso: null },
-  PA: { valor: "quercus", aviso: "Pasto con arbolado (dehesa): se propone quercus." },
-  FO: { valor: "pinar", aviso: "SIGPAC no distingue el tipo de arbolado: por prudencia se propone pinar, el más rápido. Ajusta si conoces el terreno." }
-};
+// Equivalencias operativas confirmadas por José Antonio (velocidad base m/min):
+// PS=3, PR/MT=6, PA=3 y FO=8. TA queda sin asociación automática.
+const SUGERENCIA_COMBUSTIBLE = Core.SUGERENCIA_COMBUSTIBLE_SIGPAC;
 
 const NOMBRE_CUADRANTE = {
   riesgo: "riesgo",
@@ -757,7 +469,7 @@ const estado = {
   zona: null,
   objetivo: "fuego",
   resultado: null,
-  vientoAuto: { activo: false, cargando: false, datos: null, error: null },
+  vientoAuto: { activo: false, cargando: false, datos: null, error: null, caducado: false },
   penAuto: { activo: false, cargando: false, datos: null, error: null },
   editor: null,
   // Marca si el usuario ha tocado los sliders manuales (sin valor operativo hasta entonces)
@@ -792,7 +504,8 @@ async function obtenerVientoCacheado(lat, lon, forzar = false) {
   const clave = claveViento(lat, lon);
   const ahora = Date.now();
   const e = cacheViento.get(clave);
-  if (!forzar && e && ahora - e.t < MINUTOS_CACHE_VIENTO * 60000) return e.d;
+  if (!forzar && e && Core.esDatoVientoVigente(e.d, ahora, MINUTOS_CACHE_VIENTO)) return e.d;
+  if (e) cacheViento.delete(clave);
 
   const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat +
     "&longitude=" + lon + "&current=wind_speed_10m,wind_direction_10m&timezone=auto";
@@ -801,15 +514,17 @@ async function obtenerVientoCacheado(lat, lon, forzar = false) {
   if (!c || typeof c.wind_speed_10m !== "number" || typeof c.wind_direction_10m !== "number") {
     throw new Error("Respuesta sin datos de viento");
   }
-  const hacia = direccionHaciaDesdeMeteo(c.wind_direction_10m);
+  const consultadoEnMs = Date.now();
+  const hacia = Core.direccionHaciaDesdeMeteo(c.wind_direction_10m);
   const d = {
     velocidadKmh: c.wind_speed_10m,
     desdeGrados: c.wind_direction_10m,
     haciaGrados: hacia,
-    haciaCardinal: gradosACardinal(hacia),
-    horaConsulta: horaActualTexto()
+    haciaCardinal: Core.gradosACardinal(hacia),
+    horaConsulta: horaActualTexto(),
+    consultadoEnMs
   };
-  cacheViento.set(clave, { t: ahora, d });
+  cacheViento.set(clave, { t: consultadoEnMs, d });
   return d;
 }
 
@@ -831,7 +546,7 @@ async function consultarElevacionesOpenMeteo(f, z) {
     "&longitude=" + f.lon + "," + z.lon;
   const j = await fetchJson(url);
   if (!j.elevation || j.elevation.length !== 2) throw new Error("respuesta sin elevaciones");
-  return { elevaciones: j.elevation, fuente: "Open-Meteo" };
+  return { elevaciones: j.elevation, fuente: "Open-Meteo (Copernicus DEM GLO-90)" };
 }
 
 async function obtenerPendienteCacheada(f, z) {
@@ -853,8 +568,8 @@ async function obtenerPendienteCacheada(f, z) {
   }
 
   const elevF = datos.elevaciones[0], elevZ = datos.elevaciones[1];
-  const distanciaM = calcularDistanciaM(f.lat, f.lon, z.lat, z.lon);
-  const p = calcularPendienteDesdeElevaciones(elevF, elevZ, distanciaM);
+  const distanciaM = Core.calcularDistanciaM(f.lat, f.lon, z.lat, z.lon);
+  const p = Core.calcularPendienteDesdeElevaciones(elevF, elevZ, distanciaM);
   const d = {
     desnivelM: p.desnivelM,
     pendientePct: p.pendientePct,
@@ -876,6 +591,19 @@ const cacheSigpac = new Map();
 function claveSigpac(p) { return p.lat.toFixed(4) + "," + p.lon.toFixed(4); }
 
 let tokenSigpac = 0;
+
+function invalidarSigpacPorCambioIncendio() {
+  tokenSigpac++;
+  const sg = estado.sigpac;
+  sg.cargando = false;
+  sg.datos = null;
+  sg.error = null;
+  if (estado.combPorSigpac) {
+    document.getElementById("in-comb").value = "";
+    estado.combPorSigpac = false;
+  }
+}
+
 async function consultarSigpac() {
   const sg = estado.sigpac;
   if (!estado.fuego || !RESOLVER_URL) return;
@@ -893,7 +621,7 @@ async function consultarSigpac() {
   try {
     const j = await fetchJson(RESOLVER_URL + "/sigpac?lat=" + estado.fuego.lat + "&lon=" + estado.fuego.lon);
     if (token !== tokenSigpac) return;
-    sg.datos = { uso: j.uso };
+    sg.datos = { uso: Core.normalizarCodigoSigpac(j.uso) };
     cacheSigpac.set(clave, sg.datos);
   } catch (err) {
     if (token !== tokenSigpac) return;
@@ -937,17 +665,19 @@ function renderSigpac() {
   }
 
   const nombre = USO_SIGPAC_NOMBRE[uso] || uso;
+  const usoSeguro = Core.escaparHtml(uso);
+  const nombreSeguro = Core.escaparHtml(nombre);
   const sug = SUGERENCIA_COMBUSTIBLE[uso];
 
   if (!sug) {
-    card.innerHTML = "Uso del suelo: <b>" + nombre + " (" + uso + ")</b>. " +
+    card.innerHTML = "Uso del suelo: <b>" + nombreSeguro + " (" + usoSeguro + ")</b>. " +
       "Sin equivalencia directa con los combustibles del modelo: elige manualmente." + atribucion;
     return;
   }
 
-  card.innerHTML = "Uso del suelo: <b>" + nombre + " (" + uso + ")</b>. " +
-    "Sugerencia: <b>" + NOMBRE_COMBUSTIBLE[sug.valor] + "</b>." +
-    (sug.aviso ? "<div class='mini-nota'>" + sug.aviso + "</div>" : "") +
+  card.innerHTML = "Uso del suelo: <b>" + nombreSeguro + " (" + usoSeguro + ")</b>. " +
+    "Sugerencia: <b>" + Core.escaparHtml(NOMBRE_COMBUSTIBLE[sug.valor]) + "</b>." +
+    (sug.aviso ? "<div class='mini-nota'>" + Core.escaparHtml(sug.aviso) + "</div>" : "") +
     atribucion +
     "<button class='btn mini' id='btn-sigpac-usar' type='button'>Usar sugerencia</button>";
   document.getElementById("btn-sigpac-usar").addEventListener("click", function () {
@@ -964,23 +694,32 @@ function renderSigpac() {
 let tokenViento = 0;
 async function actualizarVientoAuto(forzar = false) {
   const va = estado.vientoAuto;
-  if (!va.activo) { renderVientoAuto(); refrescar(); return; }
+  if (!va.activo) {
+    tokenViento++;
+    cancelarTemporizadorCaducidadViento();
+    renderVientoAuto(); refrescar(); return;
+  }
 
   if (!estado.fuego) {
-    va.datos = null; va.error = null; va.cargando = false;
+    cancelarTemporizadorCaducidadViento();
+    va.datos = null; va.error = null; va.caducado = false; va.cargando = false;
     renderVientoAuto(); refrescar(); return;
   }
 
   const token = ++tokenViento;
-  va.cargando = true; va.error = null;
+  invalidarResultado();
+  va.cargando = true; va.error = null; va.caducado = false;
   renderVientoAuto(); refrescar();
   try {
     const d = await obtenerVientoCacheado(estado.fuego.lat, estado.fuego.lon, forzar);
     if (token !== tokenViento) return; // llegó tarde: hay una consulta más reciente
-    va.datos = d; va.error = null;
+    va.datos = d; va.error = null; va.caducado = false;
+    programarCaducidadViento(d);
   } catch (err) {
     if (token !== tokenViento) return;
+    cancelarTemporizadorCaducidadViento();
     va.datos = null;
+    va.caducado = false;
     va.error = "No se pudo obtener el viento (" +
       (err && err.name === "AbortError" ? "tiempo agotado" : err.message) + ").";
   }
@@ -1038,10 +777,10 @@ function renderVientoAuto() {
     const d = va.datos;
     card.innerHTML =
       "<b>" + Math.round(d.velocidadKmh) + " km/h</b>, empujando hacia <b>" + d.haciaCardinal + "</b> " +
-      "(" + Math.round(d.haciaGrados) + "° hacia · sopla desde " + Math.round(d.desdeGrados) + "°)." +
+      "(" + d.haciaGrados.toFixed(1) + "° hacia · sopla desde " + d.desdeGrados.toFixed(1) + "°)." +
       "<div class='mini-nota'>Dato puntual en el punto del incendio, consultado a las " + d.horaConsulta + ". " +
       "Se reutiliza un máximo de " + MINUTOS_CACHE_VIENTO + " minutos: lo que ves es lo que se usa en el cálculo. " +
-      "(Fuente: Open-Meteo)</div>" +
+      "(Datos meteorológicos: <a href='https://open-meteo.com/' target='_blank' rel='noopener noreferrer'>Open-Meteo</a>, CC BY 4.0)</div>" +
       "<button class='btn mini' id='btn-viento-refresh' type='button'>Actualizar ahora</button>";
     document.getElementById("btn-viento-refresh").addEventListener("click", () => actualizarVientoAuto(true));
   }
@@ -1058,7 +797,7 @@ function renderPendienteAuto() {
     card.innerHTML = "Fija <b>incendio</b> y <b>zona vulnerable</b>: la pendiente se estima entre ambos puntos." +
       "<div class='mini-nota'>Mientras tanto el cálculo queda bloqueado: no se usan valores inventados.</div>";
   } else if (pa.cargando) {
-    card.innerHTML = "Consultando elevaciones en Open-Meteo…";
+    card.innerHTML = "Consultando elevaciones (IGN; respaldo Open-Meteo)…";
   } else if (pa.error) {
     card.innerHTML = "<span class='err'>" + pa.error + "</span>" +
       "<div class='mini-nota'>El cálculo queda bloqueado: reintenta o pasa a pendiente manual.</div>" +
@@ -1072,7 +811,7 @@ function renderPendienteAuto() {
       "<div class='mini-nota'>Elevación incendio " + Math.round(d.elevFuegoM) + " m · zona " +
       Math.round(d.elevZonaM) + " m · desnivel " + signo + Math.round(d.desnivelM) + " m. " +
       "Estimación provisional con solo los dos puntos extremos. " +
-      "(Fuente: " + d.fuente + ")</div>";
+      "(Fuente: " + Core.escaparHtml(d.fuente) + ")</div>";
   }
 }
 
@@ -1081,7 +820,8 @@ function renderPendienteAuto() {
 const map = L.map("map").setView(CENTRO_TRABAJO, 13);
 
 const capaOSM = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19, attribution: "© OpenStreetMap"
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
 });
 const capaSat = L.tileLayer(
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -1110,7 +850,7 @@ function alCambiarPunto(tipo) {
   if (tipo === "fuego" && estado.vientoAuto.activo) actualizarVientoAuto();
   if (estado.penAuto.activo) actualizarPendienteAuto();
   if (tipo === "fuego") {
-    estado.sigpac.datos = null; estado.sigpac.error = null; estado.sigpac.cargando = false;
+    invalidarSigpacPorCambioIncendio();
     renderSigpac();
   }
   refrescar();
@@ -1121,6 +861,14 @@ function fijarPunto(tipo, latlng) {
 
   if (!marcadores[tipo]) {
     marcadores[tipo] = L.marker(latlng, { icon: icono(tipo), draggable: true }).addTo(map);
+    marcadores[tipo].on("dragstart", () => {
+      invalidarResultado();
+      if (tipo === "fuego") {
+        invalidarSigpacPorCambioIncendio();
+        renderSigpac();
+      }
+      refrescar();
+    });
     marcadores[tipo].on("drag", (e) => {
       const p = e.target.getLatLng();
       estado[tipo] = { lat: +p.lat.toFixed(6), lon: +p.lng.toFixed(6) };
@@ -1154,6 +902,46 @@ function invalidarResultado() {
   document.getElementById("resumen").style.display = "none";
 }
 
+let temporizadorCaducidadViento = null;
+
+function cancelarTemporizadorCaducidadViento() {
+  if (temporizadorCaducidadViento !== null) {
+    clearTimeout(temporizadorCaducidadViento);
+    temporizadorCaducidadViento = null;
+  }
+}
+
+function marcarVientoCaducadoSiProcede(datosEsperados = estado.vientoAuto.datos) {
+  const va = estado.vientoAuto;
+  if (!datosEsperados || va.datos !== datosEsperados ||
+      Core.esDatoVientoVigente(datosEsperados, Date.now(), MINUTOS_CACHE_VIENTO)) {
+    return false;
+  }
+  cancelarTemporizadorCaducidadViento();
+  va.datos = null;
+  va.cargando = false;
+  va.caducado = true;
+  va.error = "El dato de viento ha caducado. Actualízalo para volver a calcular.";
+  if (va.activo) invalidarResultado();
+  return true;
+}
+
+function programarCaducidadViento(datos) {
+  cancelarTemporizadorCaducidadViento();
+  const restanteMs = datos.consultadoEnMs + MINUTOS_CACHE_VIENTO * 60000 - Date.now();
+  if (restanteMs <= 0) {
+    marcarVientoCaducadoSiProcede(datos);
+    return;
+  }
+  temporizadorCaducidadViento = setTimeout(function () {
+    temporizadorCaducidadViento = null;
+    if (marcarVientoCaducadoSiProcede(datos) && estado.vientoAuto.activo) {
+      renderVientoAuto();
+      refrescar();
+    }
+  }, restanteMs + 25);
+}
+
 function dibujarCuadrantes(r) {
   limpiarCapasCalculo();
   const f = estado.fuego;
@@ -1167,13 +955,13 @@ function dibujarCuadrantes(r) {
     ["Cuadrante sin riesgo directo", dir + 180, "#10b981", 0.20]
   ];
   for (const s of sectores) {
-    const pol = L.polygon(crearSectorLatLng(f.lat, f.lon, s[1], 90, radio), {
+    const pol = L.polygon(Core.crearSectorLatLng(f.lat, f.lon, s[1], 90, radio), {
       color: s[2], weight: 2, fillColor: s[2], fillOpacity: s[3]
     }).bindTooltip(s[0]).addTo(map);
     capasCalculo.push(pol);
   }
 
-  const fin = puntoDesdeOrigen(f.lat, f.lon, dir, radio);
+  const fin = Core.puntoDesdeOrigen(f.lat, f.lon, dir, radio);
   const flecha = L.polyline([[f.lat, f.lon], fin], { color: "#dc2626", weight: 5 })
     .bindTooltip("Dirección del viento").addTo(map);
   capasCalculo.push(flecha);
@@ -1184,12 +972,14 @@ function leerEntradas() {
 
   const viento = va.activo
     ? {
-        direccionVientoHacia: va.datos.haciaCardinal,
+        direccionVientoHacia: va.datos.haciaGrados,
+        direccionVientoTexto: va.datos.haciaGrados.toFixed(1) + "°",
         velocidadVientoKmh: Math.round(va.datos.velocidadKmh),
         fuenteViento: "Open-Meteo, " + va.datos.horaConsulta
       }
     : {
         direccionVientoHacia: document.getElementById("in-dir").value,
+        direccionVientoTexto: document.getElementById("in-dir").value,
         velocidadVientoKmh: +document.getElementById("in-vel").value,
         fuenteViento: "manual"
       };
@@ -1208,6 +998,7 @@ function leerEntradas() {
 
   return {
     direccionVientoHacia: viento.direccionVientoHacia,
+    direccionVientoTexto: viento.direccionVientoTexto,
     velocidadVientoKmh: viento.velocidadVientoKmh,
     fuenteViento: viento.fuenteViento,
     pendientePct: pendiente.pendientePct,
@@ -1219,8 +1010,14 @@ function leerEntradas() {
 }
 
 function calcular() {
+  const bloqueos = motivosBloqueo();
+  if (bloqueos.length > 0) {
+    renderVientoAuto();
+    refrescar();
+    return;
+  }
   const ent = leerEntradas();
-  const r = evaluarAlertaFuego({
+  const r = Core.evaluarAlertaFuego({
     latFuego: estado.fuego.lat, lonFuego: estado.fuego.lon,
     latZona: estado.zona.lat, lonZona: estado.zona.lon,
     direccionVientoHacia: ent.direccionVientoHacia,
@@ -1284,13 +1081,13 @@ function pintarResultado() {
   let tecExtra = "";
   if (r.vientoAutoDatos) {
     const dv = r.vientoAutoDatos;
-    tecExtra += "Viento Open-Meteo: sopla desde " + Math.round(dv.desdeGrados) + "° → empuja hacia " +
-      Math.round(dv.haciaGrados) + "° (" + dv.haciaCardinal + "), consultado a las " + dv.horaConsulta + ".<br>";
+    tecExtra += "Viento Open-Meteo: sopla desde " + dv.desdeGrados.toFixed(1) + "° → empuja hacia " +
+      dv.haciaGrados.toFixed(1) + "° (" + dv.haciaCardinal + "), consultado a las " + dv.horaConsulta + ".<br>";
   }
   if (r.penAutoDatos) {
     const dp = r.penAutoDatos;
     const signo = dp.desnivelM >= 0 ? "+" : "";
-    tecExtra += "Elevaciones Open-Meteo: incendio " + Math.round(dp.elevFuegoM) + " m · zona " +
+    tecExtra += "Elevaciones " + Core.escaparHtml(dp.fuente) + ": incendio " + Math.round(dp.elevFuegoM) + " m · zona " +
       Math.round(dp.elevZonaM) + " m · desnivel " + signo + Math.round(dp.desnivelM) + " m.<br>";
   }
 
@@ -1311,7 +1108,7 @@ function pintarResultado() {
     "</div>" +
 
     '<div class="datos-usados"><b>Datos usados:</b> pendiente ' + ent.pendientePct + " % (el fuego avanza " + ent.sentidoLadera + ")" +
-      " (" + ent.fuentePendiente + ") · viento " + ent.velocidadVientoKmh + " km/h empujando hacia " + ent.direccionVientoHacia +
+      " (" + ent.fuentePendiente + ") · viento " + ent.velocidadVientoKmh + " km/h empujando hacia " + ent.direccionVientoTexto +
       " (" + ent.fuenteViento + ") · " + NOMBRE_COMBUSTIBLE[ent.tipoCombustible] + " (" + ent.fuenteCombustible + ").</div>" +
 
     '<details class="bloque" open>' +
@@ -1323,7 +1120,7 @@ function pintarResultado() {
       "<summary>Detalles técnicos del cálculo</summary>" +
       '<div class="tec">' +
         "Rumbo incendio → zona: " + r.rumboFuegoZona.toFixed(1) + "° · Dirección del viento: " +
-        r.direccionVientoGrados + "° · Diferencia angular: " + r.diferenciaFirmada.toFixed(1) + "°<br>" +
+        r.direccionVientoGrados.toFixed(1) + "° · Diferencia angular: " + r.diferenciaFirmada.toFixed(1) + "°<br>" +
         "Cuadrante: " + NOMBRE_CUADRANTE[r.cuadrante] + " · Escenario por tiempo: " + NOMBRE_ESCENARIO[r.escenario] + "<br>" +
         tecExtra +
         "VPIF = " + r.v0 + " · " + r.fv + " · " + r.fp + " = " + r.vpif.toFixed(2) + " m/min · " +
@@ -1367,7 +1164,7 @@ async function aplicarEditor() {
   const tipo = estado.editor;
   if (!tipo) return;
   const texto = document.getElementById("editor-input").value;
-  let r = parsearUbicacion(texto);
+  let r = Core.parsearUbicacion(texto);
 
   // Enlace corto: intentar resolverlo con el servicio propio, si está configurado
   if (!r.ok && r.motivo === "enlace_corto" && RESOLVER_URL) {
@@ -1375,7 +1172,7 @@ async function aplicarEditor() {
     document.getElementById("editor-msg").textContent = "Resolviendo enlace corto…";
     try {
       const resp = await fetchJson(RESOLVER_URL + "/resolver?url=" + encodeURIComponent(enlace));
-      if (resp && resp.url_final) r = parsearUbicacion(resp.url_final);
+      if (resp && resp.url_final) r = Core.parsearUbicacion(resp.url_final);
     } catch (e) {
       // se mantiene r con motivo enlace_corto y cae al mensaje estándar
     }
@@ -1453,7 +1250,9 @@ function motivosBloqueo() {
 
   // Viento
   if (va.activo) {
+    marcarVientoCaducadoSiProcede();
     if (va.cargando) motivos.push("consultando viento…");
+    else if (va.caducado) motivos.push("el viento automático ha caducado (actualízalo o pasa a manual)");
     else if (!va.datos && estado.fuego) motivos.push("viento automático no disponible (reintenta o pasa a manual)");
   } else {
     const dirElegida = document.getElementById("in-dir").value !== "";
@@ -1535,16 +1334,19 @@ document.getElementById("in-comb").addEventListener("change", function () {
 });
 
 document.getElementById("btn-borrar").addEventListener("click", function () {
+  tokenViento++;
+  tokenPen++;
+  cancelarTemporizadorCaducidadViento();
+  invalidarSigpacPorCambioIncendio();
   for (const t of ["fuego", "zona"]) {
     if (marcadores[t]) { map.removeLayer(marcadores[t]); marcadores[t] = null; }
     estado[t] = null;
   }
   estado.objetivo = "fuego";
-  estado.vientoAuto.datos = null; estado.vientoAuto.error = null;
+  estado.vientoAuto.datos = null; estado.vientoAuto.error = null; estado.vientoAuto.caducado = false; estado.vientoAuto.cargando = false;
   estado.penAuto.datos = null; estado.penAuto.error = null;
   estado.velElegida = false; estado.penElegida = false;
   estado.sigpac.datos = null; estado.sigpac.error = null; estado.sigpac.cargando = false;
-  estado.combPorSigpac = false;
   document.getElementById("wrap-vel").classList.add("sin-elegir");
   document.getElementById("wrap-pen").classList.add("sin-elegir");
   document.getElementById("out-vel").textContent = "sin elegir";

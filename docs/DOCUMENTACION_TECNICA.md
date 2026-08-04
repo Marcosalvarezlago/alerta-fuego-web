@@ -1,153 +1,266 @@
 # Alerta Fuego — Documentación técnica
 
-*Estado: demo funcional para validación externa. IGN y SIGPAC integrados. Última revisión alineada con el `index.html` final.*
+*Estado: demo web funcional en fase de validación. Este documento separa expresamente lo que está implementado de lo que solo está propuesto.*
 
 ---
 
-## 1. Propósito y alcance
+## 1. Propósito, alcance y nivel de validación
 
-Aplicación web para estimar de forma orientativa el tiempo de llegada de un frente de incendio forestal a una zona vulnerable, según el modelo documental del grupo Alerta Fuego (VPIF = V0·FV·FP; tiempo = distancia/VPIF).
+Alerta Fuego estima de forma orientativa el tiempo de llegada de un frente de incendio forestal a una zona vulnerable. La implementación actual usa el modelo:
 
-Principio rector: **no transmitir falsa precisión ni falsa seguridad**. Ante duda, la app bloquea o avisa en lugar de completar con supuestos. No sustituye a 112, INFOEX, bomberos, Protección Civil ni autoridades competentes.
+**VPIF = V0 · FV · FP**
 
----
+**tiempo = distancia / VPIF**
 
-## 2. Arquitectura
+La aplicación no es un modelo profesional de propagación, no predice la evolución real de un incendio y no sustituye al 112, INFOEX, bomberos, Protección Civil ni a ninguna autoridad competente. Sus resultados no deben utilizarse para apurar una evacuación, entrar en una zona comprometida ni contradecir instrucciones oficiales.
 
-**Aplicación:** página web estática de un solo archivo (`index.html`), sin framework ni proceso de compilación. HTML + CSS + JavaScript plano, con Leaflet para el mapa.
+El documento original del grupo es la fuente que debe permitir comprobar la procedencia de las tablas y de los protocolos. En el estado del repositorio sobre el que se hizo esta revisión, ese PDF no estaba versionado; por tanto, la afirmación histórica de que el portado es «1:1» no es auditable únicamente con este repositorio. Incorporar la fuente, su versión y su fecha forma parte de la trazabilidad pendiente.
 
-**Motivo del diseño:** la versión anterior (Streamlit) reejecutaba toda la página en cada interacción, lo que hacía el mapa incómodo (saltos de encuadre, recargas, mal comportamiento en móvil). Una web estática elimina ese problema de raíz: el mapa responde localmente, sin servidor.
-
-**Dependencias externas (en tiempo de ejecución, vía CDN):**
-- **Leaflet 1.9.4**: motor de mapa (mismo que usaba Folium por debajo en la versión Streamlit).
-- **Teselas de mapa**: OpenStreetMap (base) y Esri World Imagery (satélite).
-
-**Servicios de datos (llamadas desde el navegador):**
-- **Open-Meteo**: viento actual (`/v1/forecast`, `wind_speed_10m` + `wind_direction_10m`) y elevación (`/v1/elevation`). Sin clave de API. Permite CORS.
-
-**Infraestructura propia:**
-- **Cloudflare Worker** (`worker.js`): microservicio intermedio, necesario porque una web estática no puede llamar directamente a ciertos servicios oficiales (política CORS). Tres endpoints:
-  - `/resolver`: resuelve enlaces cortos de Google Maps (`maps.app.goo.gl`), que no contienen coordenadas. Lista blanca de dominios para no actuar como proxy abierto. Contempla el caso en que Google interpone su página de verificación (`/sorry`) y extrae la coordenada del parámetro `continue`.
-  - `/elevaciones`: pendiente de precisión vía IGN (ver §5).
-  - `/sigpac`: uso del suelo vía SIGPAC (ver §5).
-  - Plan gratuito (100.000 peticiones/día; el uso previsto por persona es de unas pocas peticiones puntuales, muy por debajo del límite).
-
-**Despliegue:** GitHub Pages (rama `main`, raíz). El worker se despliega aparte en Cloudflare.
+El uso previsto de IGN, SIGPAC e INFOEX sitúa la validación actual en España y, en particular, en el contexto territorial para el que fue concebido el proyecto. El mapa y Open-Meteo admiten coordenadas de otros países, pero eso no convierte la demo en una herramienta validada globalmente.
 
 ---
 
-## 3. Modelo de cálculo
+## 2. Arquitectura implementada
 
-Portado 1:1 desde la implementación Python original. **Valores sin alterar** respecto al documento:
+### Aplicación web
 
-| Combustible | V0 (m/min) |
-|---|---|
+- `index.html` contiene la interfaz y carga como módulo la lógica pura de `src/core.js`; no hay framework ni proceso de compilación.
+- Leaflet 1.9.4 se carga desde CDN.
+- OpenStreetMap proporciona el mapa base y Esri World Imagery la capa satélite.
+- El mapa, el cálculo y el estado de la interfaz se ejecutan en el navegador.
+
+La aplicación puede abrirse como web estática, pero las funciones automáticas no son completamente locales: dependen de servicios externos y de un Cloudflare Worker.
+
+### Datos consultados directamente desde el navegador
+
+- **Open-Meteo Forecast API:** estimación modelizada de viento a 10 m en el punto del incendio.
+- **Open-Meteo Elevation API:** reserva de elevación cuando no se obtiene la del IGN.
+
+El «viento actual» de la interfaz es una salida de modelo meteorológico, no una observación de una estación situada en el punto.
+
+### Cloudflare Worker
+
+La copia versionada está en `infra/worker.js`. Expone:
+
+- `/resolver`: intenta resolver enlaces cortos de Google Maps.
+- `/elevaciones`: consulta dos elevaciones en el WCS del IGN.
+- `/sigpac`: consulta el uso SIGPAC en el punto del incendio.
+
+El Worker desplegado se mantiene por separado. Mientras el despliegue sea manual, que un endpoint responda no demuestra por sí solo que su código desplegado sea idéntico a `infra/worker.js`.
+
+La copia versionada acepta únicamente `GET` y `OPTIONS`, valida formato y rango de coordenadas, normaliza la respuesta SIGPAC y limita el resolvedor a rutas concretas de Google Maps. Las redirecciones se siguen manualmente, con un máximo de cinco saltos y validación de cada destino. Se mantiene CORS `*` para que la web estática pueda llamar al Worker; eso permite también llamadas desde otros orígenes y debe tenerse en cuenta para cuota, abuso y observabilidad.
+
+---
+
+## 3. Modelo implementado
+
+### Combustible
+
+| Combustible del modelo | V0 (m/min) |
+|---|---:|
 | Pastos bajos | 3 |
 | Bosque de quercus / encinar / robledal | 4 |
 | Matorral mediterráneo | 6 |
 | Pinar | 8 |
 
-| Viento (km/h) | FV |
-|---|---|
-| < 10 | 1 |
-| 10–20 | 1,5 |
-| 20–30 | 2 |
-| > 30 | 3 |
+### Viento
 
-| Pendiente (fuego subiendo) | FP |
-|---|---|
-| < 20 % | 1 |
-| 20–40 % | 1,5 |
-| > 40 % | 2 |
+Estas son las fronteras que ejecuta actualmente el código:
+
+| Velocidad (km/h) | FV |
+|---|---:|
+| `v < 10` | 1 |
+| `10 ≤ v < 20` | 1,5 |
+| `20 ≤ v < 30` | 2 |
+| `v ≥ 30` | 3 |
+
+La dirección automática en grados se convierte a dirección «hacia» sumando 180° y el cálculo conserva esos grados. El modo manual ofrece ocho direcciones cardinales (N, NE, E, SE, S, SO, O, NO).
+
+### Pendiente
+
+| Situación | FP |
+|---|---:|
+| Fuego subiendo y pendiente `< 20 %` | 1 |
+| Fuego subiendo y pendiente `20–40 %`, ambos incluidos | 1,5 |
+| Fuego subiendo y pendiente `> 40 %` | 2 |
 | Fuego bajando ladera | 0,7 |
 | En llano | 1 |
 
-- **Distancia**: fórmula de Haversine.
-- **Cuadrantes**: se calcula el rumbo incendio→zona y su diferencia angular con la dirección del viento. ≤45° → riesgo; 45–135° → alerta (lateral, con lado); >135° → sin riesgo directo. El empate exacto en 45° cae del lado prudente (riesgo).
-- **Escenario por tiempo**: ≤30 min, ≤60 min, ≤90 min, o vigilancia preventiva por encima.
+### Geometría y escenarios
 
-**Verificación:** el ejemplo del documento (matorral, 20 km/h, 30 % subiendo) da VPIF = 6·2·1,5 = 18 m/min. La batería de pruebas confirma ese valor y las fronteras de todas las tablas.
+- La distancia entre incendio y zona se calcula mediante Haversine, en línea recta.
+- El rumbo incendio→zona se compara con la dirección operativa del viento.
+- Diferencia angular `≤ 45°`: riesgo.
+- Diferencia angular `> 45° y ≤ 135°`: alerta lateral.
+- Diferencia angular `> 135°`: sin riesgo directo según el viento usado.
+- El tiempo se normaliza hacia abajo a minutos enteros para no mostrar más margen que el calculado; el texto y el escenario usan ese mismo entero.
+- Escenarios: `≤ 30 min`, `≤ 60 min`, `≤ 90 min` y vigilancia preventiva por encima.
 
-**Nota:** el modelo no se modifica sin aviso explícito. La evolución "por tramos" (perfil de pendiente, combustible y viento por segmentos del recorrido) está pospuesta y documentada como cambio de modelo que requeriría validación externa.
-
----
-
-## 4. Decisiones de diseño prudencial
-
-Estas decisiones son deliberadas y no deben revertirse sin considerar su motivo:
-
-1. **Nada operativo por defecto.** Los tres datos (viento, pendiente, combustible) arrancan sin seleccionar; los sliders aparecen atenuados hasta que el usuario los toca. Calcular permanece bloqueado, indicando qué falta. Evita calcular con valores que el usuario no ha elegido conscientemente.
-
-2. **Sin valores inventados en modo automático.** Si Open-Meteo no responde o faltan coordenadas, la app no sustituye por un valor por defecto: bloquea el cálculo, explica el motivo y ofrece reintentar o pasar a manual. (Corrige un patrón de la versión Streamlit, donde un fallo silencioso permitía calcular con datos ficticios.)
-
-3. **Coherencia entre lo mostrado y lo calculado.** El viento automático se cachea por coordenadas del punto del incendio (TTL 10 min) y muestra la hora de consulta. Así el dato en pantalla es exactamente el usado en el cálculo, y no cambia solo entre interacciones.
-
-4. **Invalidación del resultado.** Cualquier cambio de punto o de dato borra el resultado y los cuadrantes del mapa: nunca se muestra un resultado que no corresponde al estado actual.
-
-5. **Presentación según cuadrante.** En "sin riesgo directo" no se muestra el protocolo de tiempos sino vigilancia preventiva, para no alarmar fuera de la trayectoria principal. El cálculo subyacente es el mismo.
-
-6. **Recordatorio prudencial** fijo en cabecera y resultado (referencia al 112 y a los servicios competentes).
+El ejemplo implementado con matorral, 20 km/h y 30 % subiendo produce `6 · 2 · 1,5 = 18 m/min`. Esto comprueba la aritmética del código; no sustituye la comparación con la fuente documental ni una validación operativa.
 
 ---
 
-## 5. Datos automáticos: estado y límites
+## 4. Datos automáticos y sus límites
 
-- **Viento (Open-Meteo):** operativo. Conversión verificada de dirección meteorológica "desde" a dirección operativa "hacia" (+180°). Resolución del modelo (1–11 km): entre puntos a distancia operativa el viento apenas varía, por lo que consultarlo en el punto del incendio es una convención correcta, no una simplificación problemática. La mejora futura real en este dato no es espacial sino **temporal** (pronóstico horario integrado en un modelo por tramos); ver §9.
+### Viento — Open-Meteo
 
-- **Pendiente (IGN, con reserva a Open-Meteo):** operativo. Consulta el Modelo Digital del Terreno del IGN (resolución 5 m, servicio WCS oficial) a través del worker, que pide un recuadro mínimo alrededor de cada punto en formato ArcGrid (texto plano) y extrae el valor central. Si el IGN no responde, cae automáticamente a Open-Meteo (~90 m de resolución) **con la fuente indicada de forma explícita** en la interfaz y en el resultado: nunca un descenso silencioso. En ambos casos el método sigue siendo el de dos puntos extremos (no un perfil completo del recorrido); por eso se etiqueta como "provisional" independientemente de la fuente.
+- Se consulta en el punto del incendio.
+- La respuesta se conserva en memoria durante un máximo de diez minutos por coordenadas aproximadas.
+- La interfaz muestra la hora en que la aplicación hizo la consulta.
+- La velocidad se redondea a km/h enteros, igual que se muestra en la interfaz. La dirección conserva los grados automáticos y no se reduce a un cardinal.
+- La resolución y el modelo concreto pueden variar según ubicación y disponibilidad de Open-Meteo.
 
-- **Combustible (SIGPAC, sugerencia confirmable):** operativo, pero con una decisión de diseño deliberada: **SIGPAC no decide, sugiere**. Consulta el uso oficial del suelo en el punto del incendio mediante la consulta `recinfobypoint` del Servicio de Consultas SIGPAC (FEGA), y propone un combustible equivalente (tabla en `app_ui.js`, `SUGERENCIA_COMBUSTIBLE`). El combustible solo se vuelve operativo si el usuario confirma con un toque ("Usar sugerencia"); un fallo del servicio no bloquea el cálculo, porque es consultivo, no imprescindible. Casos con manejo explícito: uso sin equivalencia (se pide elección manual), uso "Forestal" (SIGPAC no distingue el tipo de arbolado: se propone pinar por prudencia, con aviso, al ser el más rápido de la tabla), sin recinto en el punto (zona urbana, etc.). Atribución obligatoria por licencia: "SIGPAC — FEGA, CC BY 4.0", visible en la tarjeta.
+No debe afirmarse que el viento es homogéneo entre dos puntos solo por la resolución nominal del modelo. La orografía, la escala local y el paso del tiempo siguen siendo limitaciones relevantes.
 
-**Nota de arquitectura sobre SIGPAC:** la ruta correcta del servicio oficial es `servicioconsultassigpac/query/recinfobypoint/[srid]/[lon]/[lat].json` (orden longitud/latitud, no lat/lon). Confirmada contra el ejemplo de la documentación oficial del FEGA antes de integrarse; varias rutas de las colecciones espaciales del catálogo (`recintos`, `cultivo_declarado`) se investigaron primero y se descartaron por no llevar el atributo de uso.
+### Pendiente — IGN con reserva Open-Meteo
 
----
+El Worker intenta obtener una elevación para cada extremo mediante el WCS del IGN. Si falla, el navegador consulta Open-Meteo Elevation. Después calcula:
 
-## 6. Resolución de ubicaciones (parser)
+`pendiente = |elevación zona − elevación incendio| / distancia horizontal`
 
-El editor de coordenadas acepta:
-- Coordenadas decimales (`40.1290, -5.4610`) con coma, punto y coma o espacios.
-- Enlaces completos de Google Maps (`@lat,lon`, `!3d!4d`, `!2d!3d`, parámetros `q`/`ll`/etc., `/maps/search/lat,lon`).
-- Coordenadas Web Mercator de visores modernos (conversión a WGS84).
-- Enlaces cortos de Google (`maps.app.goo.gl`) vía Cloudflare Worker, incluyendo el caso en que Google interpone su CAPTCHA (`/sorry`) con la coordenada dentro del parámetro `continue`.
+Limitaciones:
 
-Casos con mensaje específico: enlace corto sin resolver, enlace IGN antiguo en UTM, formato no reconocido. El parser rechaza deliberadamente números que podrían ser zoom, fechas o identificadores.
+- Solo usa los dos extremos; no recorre el perfil intermedio.
+- No detecta vaguadas, crestas, barrancos ni cambios sucesivos de sentido.
+- La pendiente calculada se redondea a un porcentaje entero, igual que se muestra en la interfaz, antes de aplicar el factor.
+- IGN y Open-Meteo tienen cobertura, resolución, actualización y condiciones de servicio distintas.
+- Debe mostrarse siempre qué fuente produjo el dato. Cualquier etiqueta contradictoria en la interfaz debe considerarse un defecto de trazabilidad.
 
----
+Por estas razones, la pendiente automática es **provisional**, aunque la fuente de elevación sea oficial.
 
-## 7. Estado de pruebas
+### Combustible — SIGPAC
 
-Batería automatizada (ejecutada en el entorno de desarrollo con Node/JSDOM), 148 casos en total:
-- **Modelo (49 casos):** valores de tablas, fronteras, cuadrantes en 8 rumbos, escenarios por tiempo, formato de tiempo, distancias y rumbos de control, ejemplo documental.
-- **Geometría (7):** punto-destino, sectores, ida y vuelta.
-- **Conversiones meteo/terreno (19):** dirección desde→hacia, cardinales, pendiente desde elevaciones.
-- **Parser de ubicaciones (17):** coordenadas, todos los formatos de enlace de Google Maps, Mercator, CAPTCHA con `continue`, enlaces cortos y UTM del IGN detectados con mensaje específico.
-- **Parser ArcGrid del worker (6):** formato IGN con distintos finales de línea, valores NODATA, matrices de distinto tamaño.
-- **Extractor SIGPAC del worker (5):** verificado contra el ejemplo literal de la documentación oficial del FEGA.
-- **Interfaz completa (66, DOM simulado):** bloqueo prudencial, caché, reintentos, editor, geolocalización, invalidación, ocultación de campos en modo automático, orden de secciones, auditoría de textos, flujo completo de SIGPAC (sugerencia, confirmación, trazabilidad en el resultado, casos sin recinto y de error).
+SIGPAC aporta una **ocupación o uso del suelo en un punto**. No identifica con fiabilidad suficiente la especie, la estructura, la carga, la continuidad ni la humedad real del combustible forestal. Por ello:
 
----
+- SIGPAC sugiere; la persona confirma.
+- El fallo de SIGPAC no bloquea el cálculo si se elige combustible manualmente.
+- Un uso sin equivalencia confirmada debe quedar en selección manual.
+- Al mover el punto del incendio debe repetirse la consulta y no reutilizarse una sugerencia anterior como si perteneciera al punto nuevo.
 
-## 8. Flujo de trabajo y despliegue
+La conversación de revisión con José dejó acordado el siguiente criterio, reflejado en la constante `SUGERENCIA_COMBUSTIBLE`:
 
-- Edición en VS Code → commit/push con GitHub Desktop → publicación automática en GitHub Pages.
-- El `index.html` se ensambla a partir de fragmentos verificados por separado; el archivo final es autocontenido (un solo fichero).
-- El worker se mantiene en `worker.js` (copia en el repositorio, carpeta `infra/`) y se despliega en Cloudflare. Pendiente de backlog: automatizar su despliegue vía GitHub para evitar el doble mantenimiento.
+| Ocupación SIGPAC | V0 acordada |
+|---|---:|
+| PS | 3 |
+| PR o MT | 6 |
+| PA | 3 |
+| FO | 8 |
 
----
+Este criterio es una clasificación conservadora basada en la ocupación disponible, no una identificación botánica. No se atribuye validación de campo adicional a estas correspondencias. El resto de usos queda fuera de la equivalencia automática hasta que exista un criterio explícito.
 
-## 9. Roadmap
-
-**Backlog inmediato (post-demo):**
-- Automatizar el despliegue del worker vía GitHub (hoy requiere actualizarlo a mano en el panel de Cloudflare y en el repositorio).
-- Documentación de usuario más visual si procede.
-
-**Backlog futuro (crowdfunding):**
-- **Modelo por tramos**: dividir el recorrido incendio→zona en segmentos, cada uno con su propia pendiente (ya disponible por IGN), combustible (ya disponible por SIGPAC) y viento (incluida su variación temporal, la mejora real pendiente en este dato). Es un cambio de modelo: conserva la fórmula documental dentro de cada tramo, pero altera los resultados globales. Requiere aviso explícito y validación de perfiles con experiencia en incendios antes de publicarse. Con IGN y SIGPAC ya integrados, este es el paso natural siguiente: la infraestructura de datos está lista, falta la lógica de segmentación.
-- Revisar periódicamente la tabla de correspondencia SIGPAC→combustible (`SUGERENCIA_COMBUSTIBLE`) con criterio de campo, especialmente el caso "Forestal" (hoy resuelto por prudencia hacia pinar, el más desfavorable).
-
-**Pospuesto (no antes de validar):**
-- Simulación dinámica de frentes, propagación no lineal, aplicación Android nativa, arquitectura de servidor pesada.
+La consulta usa la ruta oficial `recinfobypoint/[srid]/[lon]/[lat].json`. Si el servicio devuelve varios recintos en un límite, seleccionar uno sin advertencia introduce otra incertidumbre que debe tratarse antes de considerar el dato definitivo.
 
 ---
 
-*Este documento describe el estado técnico para validación. El modelo de cálculo es el del documento original del grupo Alerta Fuego y no se modifica sin acuerdo explícito.*
+## 5. Comportamiento prudencial de la interfaz
+
+- Los puntos, la dirección y velocidad del viento, la pendiente, su sentido y el combustible deben quedar definidos antes de calcular.
+- Un fallo de viento o pendiente en modo automático bloquea el cálculo hasta reintentar o volver a manual.
+- SIGPAC no bloquea porque su papel es consultivo.
+- En el cuadrante «sin riesgo directo» se presenta vigilancia preventiva en vez del protocolo temporal principal.
+- La cabecera y el resultado recuerdan que la referencia real son el 112 y los servicios competentes.
+
+La intención de diseño es invalidar cualquier resultado cuando cambie una entrada. Esa propiedad debe cubrir también actualizaciones explícitas de datos automáticos y respuestas que lleguen tarde; forma parte de las comprobaciones necesarias antes de una validación externa.
+
+---
+
+## 6. Resolución de ubicaciones
+
+El editor implementa:
+
+- coordenadas decimales separadas por coma, punto y coma o espacios;
+- varios formatos de URL completa de Google Maps;
+- coordenadas Web Mercator presentes en determinados parámetros de URL;
+- enlaces cortos de Google mediante el Worker;
+- detección específica de algunos enlaces IGN antiguos con UTM, que no se convierten automáticamente.
+
+El resolvedor recibe el enlace completo y puede enviarlo a Google para seguir la redirección. Esto debe explicarse en la información de privacidad.
+
+---
+
+## 7. Pruebas y evidencia disponible
+
+El proyecto incorpora lógica pura reutilizable en `src/core.js`, pruebas Node en `tests/` y el comando reproducible `npm test`. El workflow `.github/workflows/test.yml` ejecuta esa misma orden en cada `push` y `pull_request`.
+
+Se retira el antiguo recuento histórico de casos porque no era reproducible desde la versión anterior del repositorio y sus subtotales documentados no eran coherentes. La referencia válida pasa a ser la suite que acompaña al código, no una cifra escrita a mano en este documento.
+
+No debe confundirse:
+
+- que una función exista en el código;
+- que un endpoint responda en una comprobación puntual;
+- que haya pruebas automatizadas repetibles;
+- que el modelo haya sido validado operativamente por especialistas.
+
+La suite actual cubre fronteras numéricas, cuadrantes, formato y clasificación del tiempo, vigencia del viento, equivalencias SIGPAC, parser, validación del Worker, redirecciones y errores de parámetros. La invalidación del estado SIGPAC al mover el incendio está implementada en la interfaz, pero, como el resto de interacciones completas del DOM, requiere comprobación de integración en navegador. Los proveedores reales y el comportamiento visual también necesitan comprobaciones aparte.
+
+---
+
+## 8. Fuentes, atribución y privacidad
+
+### Datos enviados
+
+Cuando se activan funciones automáticas:
+
+- las coordenadas del incendio se envían a Open-Meteo para el viento;
+- las coordenadas de incendio y zona se envían al Worker/IGN o a Open-Meteo para elevaciones;
+- la coordenada del incendio se envía al Worker/SIGPAC;
+- un enlace corto pegado se envía al Worker y a Google para resolverlo.
+
+La aplicación no implementa cuentas ni una base de datos propia, pero los proveedores externos y la infraestructura de alojamiento pueden conservar registros según sus políticas. No deben introducirse ubicaciones sensibles sin comprender este flujo.
+
+### Atribuciones a revisar y mantener
+
+- Open-Meteo y, para su Elevation API, Copernicus.
+- IGN/CNIG para el modelo digital del terreno.
+- SIGPAC — FEGA, bajo CC BY 4.0.
+- OpenStreetMap contributors y su licencia.
+- Esri y los proveedores de World Imagery que correspondan a cada zona.
+
+La presencia del nombre de una fuente no garantiza por sí sola el cumplimiento de sus condiciones. Los enlaces, fórmulas de atribución y políticas deben revisarse antes de una publicación promocionada o comercial.
+
+---
+
+## 9. Desarrollo y despliegue
+
+- GitHub Pages puede publicar `index.html` desde la raíz de una rama configurada en GitHub.
+- Esa configuración vive en GitHub y no está descrita por un workflow dentro del repositorio.
+- El Worker se despliega por separado y hoy existe riesgo de divergencia entre la copia versionada y la desplegada.
+- No hay proceso de compilación ni dependencias de ejecución instalables. `package.json` define únicamente el entorno y el comando de pruebas.
+
+Resuelto en esta rama de fiabilidad:
+
+- suite reproducible y ejecución automática en `push` y `pull_request`;
+- tabla SIGPAC alineada con el criterio acordado;
+- coherencia de tiempo, dirección automática, caducidad del viento y estado SIGPAC;
+- trazabilidad de la fuente de elevación y atribución visible de OpenStreetMap/Open-Meteo;
+- validación estricta de parámetros y redirecciones en la copia versionada del Worker.
+
+Pendiente antes de presentar la herramienta como lista para distribución:
+
+1. Versionar el PDF fuente con versión, fecha y procedencia claras.
+2. Desplegar esta revisión del Worker y registrar el identificador o fecha de despliegue.
+3. Completar la revisión jurídica de atribuciones, privacidad, licencias y alcance geográfico.
+4. Validar externamente las tablas, protocolos, textos y casos operativos.
+5. Decidir y validar el diseño del eventual cálculo por tramos.
+
+---
+
+## 10. Ampliación por tramos — no implementada
+
+El modelo actual calcula todo el trayecto con un único combustible, una pendiente entre extremos y un viento. **No existe todavía lógica por tramos en la demo.**
+
+La ampliación planteada estudia:
+
+- muestrear la línea incendio→zona aproximadamente cada 30 m;
+- construir un perfil de elevación y pendiente por segmento;
+- asignar ocupación o combustible por segmento;
+- incorporar variación temporal del viento;
+- combinar tiempos parciales sin ocultar la incertidumbre acumulada.
+
+Los 30 m son una propuesta de diseño, no una resolución validada. También son propuestas pendientes de selección y validación las fuentes o productos MDE, Copernicus y PNOA. Antes de implementar hay que acordar cobertura, resolución efectiva, licencias, tratamiento de datos ausentes, coste de consultas y validación del nuevo cálculo.
+
+La clasificación avanzada de vegetación queda **fuera de este bloque**. No se presupone que PNOA, Copernicus u otra fuente permitan convertir automáticamente vegetación real en los cuatro combustibles del modelo sin una metodología específica y validada.
+
+---
+
+*Esta documentación describe la demo y sus límites. Toda modificación del modelo o de las correspondencias operativas debe quedar versionada, probada y sometida a la validación que corresponda antes de presentarse como fiable en una emergencia.*

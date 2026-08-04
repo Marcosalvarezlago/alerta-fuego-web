@@ -1,19 +1,26 @@
 // =============================================================
 // Alerta Fuego — servicio intermedio (Cloudflare Worker)
 //
-// Endpoints:
+// Endpoints públicos:
 //   GET /resolver?url=https://maps.app.goo.gl/XXXX
-//     → { "url_final": "https://www.google.com/maps/...@lat,lon..." }
 //   GET /elevaciones?lats=LAT1,LAT2&lons=LON1,LON2
-//     → { "elevaciones": [e1, e2], "fuente": "IGN (MDT, WCS)" }
+//   GET /sigpac?lat=LAT&lon=LON
 //
-// Seguridad: /resolver solo acepta dominios de Google Maps (lista
-// blanca) para que nadie use el servicio como proxy abierto.
-// /elevaciones no acepta URLs del usuario: solo coordenadas, y el
-// destino (servicios.idee.es) es fijo.
+// /resolver valida la URL inicial, cada redirección y la URL final
+// para impedir que el Worker se convierta en un proxy abierto.
 // =============================================================
 
-const DOMINIOS_PERMITIDOS = /^https:\/\/(maps\.app\.goo\.gl|goo\.gl|maps\.google\.[a-z.]{2,6}|www\.google\.[a-z.]{2,6})\//;
+const HOSTS_MAPS_CON_RUTA = new Set([
+  "www.google.com",
+  "www.google.es"
+]);
+
+const HOSTS_MAPS_DEDICADOS = new Set([
+  "maps.google.com",
+  "maps.google.es"
+]);
+
+export const MAX_REDIRECCIONES = 5;
 
 const WCS_IGN = "https://servicios.idee.es/wcs-inspire/mdt";
 const COBERTURA_IGN = "Elevacion4258_5"; // MDT 5 m en lat/lon (EPSG:4258)
@@ -24,38 +31,203 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type"
 };
 
-function json(objeto, status = 200) {
+function json(objeto, status = 200, cabeceras = {}) {
   return new Response(JSON.stringify(objeto), {
     status,
-    headers: { ...CORS, "Content-Type": "application/json" }
+    headers: { ...CORS, "Content-Type": "application/json", ...cabeceras }
   });
 }
 
-async function fetchConTiempo(url, ms = 8000) {
+export async function fetchConTiempo(url, opciones = {}, ms = 8000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
-    return await fetch(url, { signal: ctrl.signal });
+    return await fetch(url, { ...opciones, signal: ctrl.signal });
   } finally {
     clearTimeout(t);
   }
 }
 
+function urlSinCredencialesNiPuerto(url) {
+  return url.protocol === "https:" && !url.username && !url.password && !url.port;
+}
+
+function rutaMaps(pathname) {
+  return pathname === "/maps" || pathname.startsWith("/maps/");
+}
+
+function urlDesde(valor, base) {
+  try {
+    return base ? new URL(valor, base) : new URL(valor);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Clasifica exclusivamente URLs que el resolutor puede consultar.
+ * La página /sorry de Google solo se admite cuando contiene un destino
+ * `continue` que, por sí mismo, vuelve a ser una URL válida de Maps.
+ */
+function tipoUrlDirectaGoogleMaps(url) {
+  const host = url.hostname.toLowerCase();
+
+  if (host === "maps.app.goo.gl") {
+    return url.pathname !== "/" ? "corta" : null;
+  }
+
+  if (host === "goo.gl") {
+    return rutaMaps(url.pathname) ? "corta" : null;
+  }
+
+  if (HOSTS_MAPS_DEDICADOS.has(host)) {
+    return "maps";
+  }
+
+  if (!HOSTS_MAPS_CON_RUTA.has(host)) return null;
+  if (rutaMaps(url.pathname)) return "maps";
+
+  return null;
+}
+
+export function tipoUrlGoogleMaps(valor) {
+  const url = valor instanceof URL ? valor : urlDesde(valor);
+  if (!url || !urlSinCredencialesNiPuerto(url)) return null;
+
+  const tipoDirecto = tipoUrlDirectaGoogleMaps(url);
+  if (tipoDirecto) return tipoDirecto;
+
+  const host = url.hostname.toLowerCase();
+  if (!HOSTS_MAPS_CON_RUTA.has(host)) return null;
+
+  if (url.pathname === "/sorry" || url.pathname.startsWith("/sorry/")) {
+    const continuar = url.searchParams.get("continue");
+    const urlContinuar = continuar ? urlDesde(continuar) : null;
+    const tipoContinuar = urlContinuar && urlSinCredencialesNiPuerto(urlContinuar)
+      ? tipoUrlDirectaGoogleMaps(urlContinuar)
+      : null;
+    return tipoContinuar === "maps" ? "verificacion" : null;
+  }
+
+  return null;
+}
+
+export function esUrlGoogleMapsPermitida(valor) {
+  return tipoUrlGoogleMaps(valor) !== null;
+}
+
+function destinoDeVerificacion(url) {
+  if (tipoUrlGoogleMaps(url) !== "verificacion") return null;
+  const destino = urlDesde(url.searchParams.get("continue"));
+  return tipoUrlGoogleMaps(destino) === "maps" ? destino : null;
+}
+
+/**
+ * Sigue redirecciones manualmente para poder validar todos los destinos.
+ * `fetcher` se inyecta en pruebas; debe aceptar (url, opciones).
+ */
+export async function resolverUrlGoogleMaps(
+  destino,
+  fetcher = fetchConTiempo,
+  maxRedirecciones = MAX_REDIRECCIONES
+) {
+  let actual = urlDesde(destino);
+  if (!actual || !esUrlGoogleMapsPermitida(actual)) {
+    throw new Error("URL de Google Maps no permitida");
+  }
+
+  if (!Number.isInteger(maxRedirecciones) || maxRedirecciones < 0) {
+    throw new Error("límite de redirecciones no válido");
+  }
+
+  for (let saltos = 0; saltos <= maxRedirecciones; saltos += 1) {
+    const continuar = destinoDeVerificacion(actual);
+    if (continuar) return continuar.href;
+
+    const respuesta = await fetcher(actual.href, { redirect: "manual" });
+    const esRedireccion = respuesta.status >= 300 && respuesta.status < 400;
+
+    if (esRedireccion) {
+      if (saltos >= maxRedirecciones) {
+        throw new Error("demasiadas redirecciones");
+      }
+
+      const location = respuesta.headers.get("Location");
+      const siguiente = location ? urlDesde(location, actual) : null;
+      if (!siguiente || !esUrlGoogleMapsPermitida(siguiente)) {
+        throw new Error("redirección a un dominio o ruta no permitidos");
+      }
+
+      actual = siguiente;
+      continue;
+    }
+
+    if (!respuesta.ok) {
+      throw new Error("Google Maps HTTP " + respuesta.status);
+    }
+
+    // Con redirect:"manual" `respuesta.url` debe coincidir con `actual`.
+    // Aun así se valida por defensa adicional si el runtime informa otra URL.
+    const informada = respuesta.url ? urlDesde(respuesta.url, actual) : actual;
+    if (!informada || !esUrlGoogleMapsPermitida(informada)) {
+      throw new Error("URL final no permitida");
+    }
+
+    const finalVerificacion = destinoDeVerificacion(informada);
+    if (finalVerificacion) return finalVerificacion.href;
+    if (tipoUrlGoogleMaps(informada) !== "maps") {
+      throw new Error("el enlace corto no devolvió una ubicación de Maps");
+    }
+
+    return informada.href;
+  }
+
+  throw new Error("no se pudo resolver el enlace");
+}
+
+export function parsearCoordenada(valor, minimo, maximo) {
+  if (typeof valor !== "string" || valor.trim() === "") return null;
+  const texto = valor.trim();
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(texto)) return null;
+
+  const numero = Number(texto);
+  if (!Number.isFinite(numero) || numero < minimo || numero > maximo) return null;
+  return numero;
+}
+
+export function parsearListaCoordenadas(valor, minimo, maximo, cantidad = 2) {
+  if (typeof valor !== "string") return null;
+  const partes = valor.split(",");
+  if (partes.length !== cantidad) return null;
+
+  const numeros = partes.map((parte) => parsearCoordenada(parte, minimo, maximo));
+  return numeros.every((numero) => numero !== null) ? numeros : null;
+}
+
+/** Devuelve únicamente códigos SIGPAC de dos letras, normalizados. */
+export function normalizarUsoSigpac(valor) {
+  if (typeof valor !== "string") return null;
+  const uso = valor.trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(uso) ? uso : null;
+}
+
 // --- ArcGrid (ESRI ASCII): cabecera de texto + matriz de valores ---
-function parsearArcGrid(texto) {
+export function parsearArcGrid(texto) {
   const filas = [];
   for (const linea of texto.trim().split(/\r?\n/)) {
     const t = linea.trim();
     if (!t) continue;
-    if (/^[a-zA-Z]/.test(t)) continue; // ncols, nrows, xllcorner, yllcorner, cellsize, NODATA_value
+    if (/^[a-zA-Z]/.test(t)) continue;
     const valores = t.split(/\s+/).map(Number);
-    if (valores.some((v) => !isFinite(v))) continue;
+    if (valores.some((v) => !Number.isFinite(v))) continue;
     filas.push(valores);
   }
   if (!filas.length) throw new Error("ArcGrid sin datos");
   const fila = filas[Math.floor(filas.length / 2)];
   const valor = fila[Math.floor(fila.length / 2)];
-  if (!isFinite(valor) || valor <= -999) throw new Error("sin dato de elevación en el punto");
+  if (!Number.isFinite(valor) || valor <= -999) {
+    throw new Error("sin dato de elevación en el punto");
+  }
   return valor;
 }
 
@@ -79,47 +251,34 @@ async function elevacionIGN(lat, lon) {
 export default {
   async fetch(request) {
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: CORS });
+      return new Response(null, { status: 204, headers: CORS });
+    }
+    if (request.method !== "GET") {
+      return json({ error: "método no permitido" }, 405, { Allow: "GET, OPTIONS" });
     }
 
     const url = new URL(request.url);
 
     // ------------------- /resolver -------------------
     if (url.pathname === "/resolver") {
-      const destino = url.searchParams.get("url") || "";
-
-      if (!DOMINIOS_PERMITIDOS.test(destino)) {
-        return json({ error: "dominio no permitido" }, 400);
+      const destino = url.searchParams.get("url");
+      if (!destino || !esUrlGoogleMapsPermitida(destino)) {
+        return json({ error: "dominio o ruta no permitidos" }, 400);
       }
 
       try {
-        const respuesta = await fetchConTiempo(destino);
-        let urlFinal = respuesta.url;
-
-        // Si Google interpone su CAPTCHA (/sorry), la URL real de Maps
-        // viaja dentro del parámetro continue: la extraemos.
-        if (urlFinal.includes("/sorry/")) {
-          const cont = urlFinal.match(/[?&]continue=([^&]+)/);
-          if (cont) {
-            try { urlFinal = decodeURIComponent(cont[1]); } catch (e) { /* dejar tal cual */ }
-          }
-        }
-
+        const urlFinal = await resolverUrlGoogleMaps(destino);
         return json({ url_final: urlFinal });
-      } catch (e) {
+      } catch {
         return json({ error: "no se pudo resolver el enlace" }, 502);
       }
     }
 
     // ------------------- /elevaciones -------------------
     if (url.pathname === "/elevaciones") {
-      const lats = (url.searchParams.get("lats") || "").split(",").map(Number);
-      const lons = (url.searchParams.get("lons") || "").split(",").map(Number);
-
-      const validas = lats.length === 2 && lons.length === 2 &&
-        lats.every((v) => isFinite(v) && v >= -90 && v <= 90) &&
-        lons.every((v) => isFinite(v) && v >= -180 && v <= 180);
-      if (!validas) {
+      const lats = parsearListaCoordenadas(url.searchParams.get("lats"), -90, 90);
+      const lons = parsearListaCoordenadas(url.searchParams.get("lons"), -180, 180);
+      if (!lats || !lons) {
         return json({ error: "coordenadas no válidas" }, 400);
       }
 
@@ -135,15 +294,11 @@ export default {
     }
 
     // ------------------- /sigpac -------------------
-    // Uso del suelo SIGPAC en un punto. Servicio oficial de Consultas SIGPAC
-    // (FEGA, Nube SIGPAC), consulta "recinfobypoint" documentada:
-    //   /servicioconsultassigpac/query/recinfobypoint/[srid]/[x]/[y].json
-    // OJO al orden: x = longitud, y = latitud. SRID 4258 (ETRS89 geográfico).
-    // Datos de alto valor bajo licencia CC BY 4.0 — atribución en la app.
+    // Orden oficial: x = longitud, y = latitud; SRID 4258 (ETRS89).
     if (url.pathname === "/sigpac") {
-      const lat = Number(url.searchParams.get("lat"));
-      const lon = Number(url.searchParams.get("lon"));
-      if (!isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      const lat = parsearCoordenada(url.searchParams.get("lat"), -90, 90);
+      const lon = parsearCoordenada(url.searchParams.get("lon"), -180, 180);
+      if (lat === null || lon === null) {
         return json({ error: "coordenadas no válidas" }, 400);
       }
 
@@ -156,17 +311,20 @@ export default {
         const recintos = await r.json();
 
         if (!Array.isArray(recintos)) throw new Error("respuesta inesperada del servicio");
-        if (recintos.length === 0) return json({ uso: null }); // punto sin recinto SIGPAC
+        if (recintos.length === 0) return json({ uso: null });
 
-        // Si el punto cae en un límite puede haber más de un recinto: se toma el primero.
+        // En un límite puede haber varios recintos: se conserva el primero.
         const recinto = recintos[0] || {};
         let uso = recinto.uso_sigpac;
         if (uso === undefined) {
           for (const clave of Object.keys(recinto)) {
-            if (/uso/i.test(clave)) { uso = recinto[clave]; break; }
+            if (/^uso(?:_|$)/i.test(clave)) {
+              uso = recinto[clave];
+              break;
+            }
           }
         }
-        return json({ uso: uso || null });
+        return json({ uso: normalizarUsoSigpac(uso) });
       } catch (e) {
         return json({ error: "SIGPAC no disponible: " + e.message }, 502);
       }

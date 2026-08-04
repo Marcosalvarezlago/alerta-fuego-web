@@ -1,109 +1,150 @@
 # Alerta Fuego — Guía para el equipo fundador
 
-*Documento para validación. No requiere conocimientos de informática.*
+*Documento para revisar la demo y decidir qué debe validarse antes de presentarla como herramienta fiable.*
 
 ---
 
 ## Qué es Alerta Fuego
 
-Es una aplicación web que ayuda a estimar, de forma aproximada y prudente, cuánto tiempo podría tardar un incendio forestal en alcanzar una finca, vivienda, corral o cualquier zona que queramos proteger.
+Alerta Fuego es una aplicación web que hace una estimación orientativa del tiempo que tardaría un frente de incendio en recorrer la distancia entre un punto de incendio y una zona vulnerable.
 
-Traslada a un mapa y a una pantalla de móvil el mismo cálculo de la hoja "Alerta Fuego" que ya conocéis: el que estima la velocidad de avance del fuego a partir del combustible, el viento y la pendiente, y de ahí el tiempo disponible según la distancia.
+El cálculo combina cuatro datos:
 
-**No es un modelo profesional de predicción de incendios, y no pretende serlo.** Es una ayuda para anticiparse y tomar decisiones con más margen.
+- la distancia;
+- el tipo de combustible o vegetación dominante;
+- la velocidad y dirección del viento;
+- la pendiente y el sentido en que avanza el fuego.
 
----
+La fórmula implementada es la que se venía usando en el proyecto: velocidad base del combustible multiplicada por los factores de viento y pendiente; después, distancia dividida por esa velocidad.
 
-## Qué NO es (importante)
-
-- **No sustituye al 112, INFOEX, bomberos, Protección Civil ni a las autoridades.** Ante peligro real, la única referencia válida son ellos.
-- **No predice lo que hará el fuego.** Da una estimación orientativa basada en unos pocos datos.
-- **No sirve para apurar tiempos.** El cálculo está pensado para retirarse antes, nunca para justificar quedarse.
-
-La app repite este aviso en pantalla, de forma deliberada, para que nadie confunda una estimación con una certeza.
+El documento original del grupo debe conservarse junto al proyecto para poder comprobar de forma independiente las tablas y los textos de actuación. La demo por sí sola no demuestra que el modelo haya sido validado por especialistas.
 
 ---
 
-## Cómo se usa (paso a paso)
+## Qué NO es
 
-1. **Se abre en el móvil o el ordenador** desde un enlace web. No hay que instalar nada.
-2. **Se toca el mapa para marcar el incendio** (dónde está el fuego o el conato).
-3. **Se toca de nuevo para marcar la zona vulnerable** (la finca, la casa, el corral). La app pasa sola de un punto al otro para guiarte.
-   - También se puede usar "Mi ubicación" para marcar dónde estás, o escribir/pegar unas coordenadas o un **enlace de Google Maps** (incluidos los enlaces cortos que se comparten desde el móvil).
-4. **Se rellenan tres datos**, igual que en la hoja de cálculo:
-   - **Pendiente**: cuánto sube o baja el terreno, y en qué sentido avanza el fuego.
-   - **Viento**: hacia dónde empuja y a qué velocidad.
-   - **Combustible**: qué tipo de vegetación domina (pastos, quercus, matorral, pinar).
-5. **Se pulsa "Calcular alerta"** y aparece el resultado.
+- **No predice la evolución real de un incendio.** Simplifica un fenómeno que cambia continuamente.
+- **No sustituye al 112, INFOEX, bomberos, Protección Civil ni a ninguna autoridad.**
+- **No sirve para apurar una salida ni para justificar quedarse.**
+- **No es una validación profesional del terreno, del combustible ni del viento.**
+- **No está validada para cualquier país.** IGN y SIGPAC aportan datos para el ámbito español.
 
-El viento y la pendiente se pueden rellenar a mano o dejar que la app los busque sola por internet (ver más abajo).
+Ante peligro real, llama al 112 y sigue las instrucciones oficiales aunque contradigan la estimación de la aplicación.
+
+---
+
+## Cómo se usa la demo
+
+1. Se abre la web en móvil u ordenador.
+2. Se marca el punto del incendio en el mapa.
+3. Se marca la zona que se quiere proteger.
+4. Se revisan o introducen pendiente, viento y combustible.
+5. Se pulsa **Calcular alerta**.
+
+Los puntos también pueden fijarse con coordenadas, algunos enlaces de Google Maps o, para la zona vulnerable, con «Mi ubicación».
+
+La aplicación no debería calcular mientras falte un dato necesario. Usar un dato automático no elimina la obligación de comprobar si tiene sentido con lo que se ve y se conoce del terreno.
 
 ---
 
 ## Qué muestra el resultado
 
-- **En qué cuadrante cae la zona** respecto a la dirección del viento:
-  - **Rojo (riesgo)**: el viento empuja el fuego justo hacia la zona. Es la situación principal de alerta.
-  - **Amarillo (alerta)**: la zona está a un lado; un cambio de viento podría dirigir el fuego hacia ella.
-  - **Verde (sin riesgo directo)**: con el viento actual, el fuego no va hacia la zona. Pero el viento cambia: hay que seguir vigilando.
-- **La distancia** entre el fuego y la zona.
-- **El tiempo estimado** hasta que el frente podría llegar (solo cuando la zona está en el cuadrante de riesgo o de alerta).
-- **El protocolo de actuación** correspondiente al tiempo disponible (30 minutos, 1 hora, 1 hora y media), tomado directamente del documento Alerta Fuego.
+- **Rojo — riesgo:** la zona queda en la dirección principal usada para el viento.
+- **Amarillo — alerta lateral:** un cambio de dirección puede llevar el frente hacia la zona.
+- **Verde — sin riesgo directo según ese viento:** no significa que la zona sea segura; el viento y el incendio pueden cambiar.
+- Distancia entre los dos puntos.
+- Velocidad de propagación calculada por el modelo.
+- Tiempo estimado y escenario temporal.
+- Recomendaciones asociadas al escenario.
 
-Sobre el mapa se dibujan los cuatro cuadrantes y la flecha del viento, para ver la situación de un vistazo.
-
----
-
-## El cálculo es exactamente el vuestro
-
-La app usa la misma fórmula del documento, sin cambios:
-
-**Velocidad de avance del fuego = combustible × viento × pendiente**
-
-Y de ahí: **tiempo = distancia ÷ velocidad de avance.**
-
-Los valores de las tablas (pastos 3, quercus 4, matorral 6, pinar 8; los factores de viento y de pendiente) son **los mismos del documento original**, sin alterar. Se ha comprobado con el ejemplo del propio documento (matorral, viento 20 km/h, pendiente 30 % subiendo), que da una velocidad de 18 metros por minuto: la app da ese mismo número.
-
-**Esto es lo que más nos interesa que validéis:** que el comportamiento de la app coincide con vuestra experiencia y con el modelo que se acordó.
+Los textos de actuación también deben revisarse con el equipo fundador y con criterio competente en emergencias. Que estén incorporados en la app no los convierte por sí solo en instrucciones oficiales.
 
 ---
 
-## Datos automáticos: una comodidad con límites claros
+## Los datos automáticos y sus límites
 
-La app puede buscar sola tres datos:
+### Viento
 
-- **El viento**, de un servicio meteorológico público (Open-Meteo).
-- **La pendiente**, con el Modelo Digital del Terreno del **Instituto Geográfico Nacional** (IGN), la misma fuente oficial que usan los organismos públicos. Es un dato de precisión real, aunque el método sigue siendo sencillo: solo mira la altura en el punto del incendio y en la zona vulnerable, no todo el camino entre ambos.
-- **El tipo de vegetación**, consultando el **SIGPAC** (el mapa oficial de usos del suelo del Ministerio de Agricultura) en el punto del incendio. Aquí la app **no decide sola**: muestra el uso oficial del terreno y sugiere un combustible, pero es la persona quien confirma con un toque si quiere usarlo. Nunca se aplica en automático.
+Open-Meteo ofrece una estimación de modelo meteorológico en el punto del incendio. No es un anemómetro colocado allí ni una observación directa. La aplicación convierte la dirección meteorológica «desde» en la dirección «hacia» la que empujaría el frente y conserva temporalmente la consulta.
 
-Tres decisiones importantes, por prudencia:
+Si el viento automático no está disponible o ha caducado, hay que reintentar o volver al modo manual. El cálculo no debe continuar usando un viento automático antiguo como si fuera actual.
 
-- **Si un dato automático no se puede obtener** (sin cobertura, servicio caído), la app **no se inventa un valor ni deja calcular**: avisa y pide rellenarlo a mano o reintentar. Nunca calcula con datos falsos.
-- **El viento automático muestra la hora de la consulta**, para que quede claro que es una foto de un momento, no un dato en vivo.
-- **La pendiente y el combustible se buscan en el punto del incendio.** Si el terreno cambia mucho entre el incendio y la zona protegida, conviene ajustarlo a mano con el conocimiento del lugar.
+### Pendiente
 
-Los datos del IGN y del SIGPAC son de las mismas fuentes oficiales que usan las administraciones. Su calidad y disponibilidad dependen de esos servicios públicos, ajenos al proyecto.
+La aplicación obtiene la elevación del incendio y de la zona mediante IGN; si no puede, intenta Open-Meteo. Con esos dos extremos calcula una pendiente media sencilla.
 
----
+Esto no dibuja el perfil completo entre ambos puntos. Un barranco, una cresta o varios cambios de ladera pueden quedar ocultos. Por eso la pendiente automática es provisional y la interfaz debe indicar la fuente utilizada.
 
-## En qué punto está el proyecto
+Si esta consulta falla, hay que reintentar o elegir la pendiente manualmente.
 
-- La app **funciona y es usable en móvil**. Este es el estado que traemos a validación.
-- El cálculo está **verificado** contra el documento original.
-- **Ya usa fuentes oficiales**: IGN para el terreno y SIGPAC para el tipo de vegetación, además de un servicio meteorológico público para el viento.
-- Lo que buscamos ahora: **vuestro criterio operativo**. ¿El flujo es claro? ¿Los textos del protocolo son correctos? ¿Falta algún aviso de seguridad? ¿El comportamiento encaja con la experiencia real en el monte? ¿Las sugerencias de SIGPAC (uso del suelo → tipo de combustible) tienen sentido en las fincas que conocéis?
+### Combustible y SIGPAC
 
----
+SIGPAC informa de la ocupación oficial del suelo en el punto del incendio. No sabe necesariamente qué especie hay, cuánta biomasa existe, si está seca ni cómo continúa la vegetación hasta la zona protegida.
 
-## Qué viene después (si el proyecto sigue adelante)
+Por prudencia, SIGPAC **solo sugiere**. La persona debe confirmar el combustible, y una consulta fallida no impide elegirlo manualmente.
 
-Pensado para una fase posterior, previsiblemente con financiación:
+El criterio acordado con José para esta fase es:
 
-- Afinar el cálculo dividiendo el recorrido del fuego en tramos (en lugar de un solo valor de pendiente y combustible para todo el trayecto), aprovechando mejor la precisión que ya aportan IGN y SIGPAC.
-- Incorporar la variación del viento a lo largo del tiempo, no solo en el momento de la consulta.
+| Ocupación SIGPAC | Velocidad base propuesta |
+|---|---:|
+| PS — pastizal | 3 m/min |
+| PR o MT — pasto arbustivo/matorral | 6 m/min |
+| PA — pasto con arbolado | 3 m/min |
+| FO — forestal | 8 m/min |
 
-Todo ello **manteniendo la misma regla de siempre**: antes que parecer preciso, la app debe ser honesta sobre lo que no sabe.
+Es una clasificación conservadora por ocupación, no una identificación botánica. Los usos sin correspondencia acordada deben elegirse manualmente. Al mover el punto del incendio hay que repetir la consulta; una sugerencia pertenece al punto en el que se obtuvo.
 
 ---
 
-*Alerta Fuego es una herramienta de ayuda a la anticipación. Ante cualquier emergencia real, llama al 112 y sigue las indicaciones de los servicios competentes.*
+## Qué pasa si falla internet o una fuente
+
+- Si falla **viento** o **pendiente** mientras están en automático, el cálculo queda bloqueado hasta reintentar o pasar a manual.
+- Si falla **SIGPAC**, se mantiene la elección manual de combustible porque su consulta es orientativa.
+- Las teselas del mapa, IGN, SIGPAC, Open-Meteo, Google Maps y el Worker son servicios externos. Su disponibilidad no depende solo del proyecto.
+
+No debe confundirse «el servicio respondió una vez» con «el servicio está garantizado».
+
+---
+
+## Privacidad: qué datos salen del dispositivo
+
+Al usar funciones automáticas se envían coordenadas a servicios externos:
+
+- el incendio a Open-Meteo para consultar viento;
+- incendio y zona a IGN, al Worker o a Open-Meteo para calcular elevaciones;
+- el incendio a SIGPAC para consultar ocupación;
+- un enlace corto al Worker y a Google para resolverlo.
+
+La aplicación no tiene cuentas ni una base de datos propia, pero los proveedores y alojamientos pueden generar registros conforme a sus políticas. Conviene no introducir ubicaciones sensibles sin conocer este flujo.
+
+---
+
+## En qué punto está realmente el proyecto
+
+- Existe una demo web estática que permite recorrer el flujo completo.
+- El cálculo básico, el mapa y las consultas externas están implementados.
+- La correspondencia SIGPAC se ha revisado con José y la demo refleja la tabla de esta guía.
+- La aplicación incorpora pruebas unitarias reproducibles, pero sigue necesitando comprobación visual y con servicios reales, revisión de fuentes y licencias, trazabilidad del documento original y validación operativa independiente.
+- La publicación web y el Worker son despliegues separados; el Worker requiere control de versión para evitar diferencias entre el repositorio y lo que está activo.
+
+La pregunta de esta fase no es solo «¿funciona la pantalla?», sino también:
+
+- ¿El modelo y sus fronteras coinciden con lo acordado?
+- ¿Los textos de actuación son correctos y prudentes?
+- ¿Las sugerencias SIGPAC tienen sentido en los casos conocidos?
+- ¿Qué errores deben impedir presentar un resultado?
+- ¿Qué nivel de validación hace falta antes de ampliar su uso?
+
+---
+
+## Ampliación por tramos: propuesta, no función actual
+
+La demo actual usa un único combustible, una pendiente entre extremos y un viento para todo el trayecto. **Todavía no calcula por tramos.**
+
+Se ha propuesto estudiar un muestreo aproximado cada 30 m para construir un perfil con varios segmentos. Esa distancia no está validada ni cerrada. También se han citado MDE, Copernicus y PNOA como posibles fuentes o productos a estudiar, pero todavía hay que decidir qué dato aporta cada uno, con qué resolución, cobertura, licencia y fiabilidad.
+
+La vegetación avanzada queda fuera de este bloque. No se da por hecho que una imagen o un producto geográfico pueda convertirse automáticamente en los cuatro combustibles del modelo sin una metodología específica y validada.
+
+---
+
+*Alerta Fuego es una ayuda de anticipación en desarrollo. Ante cualquier emergencia real, llama al 112 y sigue las indicaciones de los servicios competentes.*

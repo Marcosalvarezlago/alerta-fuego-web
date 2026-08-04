@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Herramienta web orientativa para estimar la propagacion inicial de un incendio forestal.",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "deploy:worker": "npx wrangler deploy"
   },
   "engines": {
     "node": ">=22"

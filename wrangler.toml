@@ -1,0 +1,5 @@
+name = "alerta-fuego-enlaces"
+main = "infra/worker.js"
+compatibility_date = "2026-08-05"
+account_id = "f1bcde89cc0d94aed156ca38aeedd5cc"
+workers_dev = true

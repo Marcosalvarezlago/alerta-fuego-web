@@ -3,6 +3,14 @@
 ## Propósito
 Este repositorio contiene la aplicación web activa de Alerta Fuego. Codex ejecuta trabajo técnico acotado; las decisiones de producto, ciencia, seguridad, datos, coste o alcance se toman fuera del repositorio y deben volver a ChatGPT antes de consolidarse cuando no estén ya documentadas aquí.
 
+## Identidad del repositorio — comprobar antes de actuar
+- **Repositorio canónico del MVP web:** `Marcosalvarezlago/alerta-fuego-web`.
+- Ruta local de referencia actual de Marcos: `G:\Mi unidad\Ápeiron\data-projects\alerta-fuego-web`.
+- `G:\Mi unidad\Ápeiron\data-projects\alerta-fuego` corresponde al proyecto/repositorio histórico Streamlit y **no debe usarse para auditar, modificar ni validar la demo web actual**.
+- `C:\Users\marco\Documents\Alerta Fuego` es un área local de auditoría y datos, no el repositorio de la aplicación.
+- Antes de cualquier misión sobre la app, verifica que la raíz contiene al menos `index.html`, `package.json`, `src/core.js` e `infra/worker.js` y que el remoto corresponde a `Marcosalvarezlago/alerta-fuego-web`.
+- Si faltan `README.md`, `AGENTS.md`, `docs/adr/0001-demo-vpif-por-tramos.md` o `docs/VALIDACION_MVP.md`, **no asumas que no existen**: comprueba primero si la copia local está desactualizada respecto a `origin/main` y sincronízala solo si la operación está autorizada y no pisa cambios locales.
+
 ## Mandato actual
 La siguiente demo debe conservar el modelo de José Antonio `VPIF = V0 · FV · FP` e incorporar **cálculo por tramos** antes del siguiente lanzamiento. La decisión está registrada en `docs/adr/0001-demo-vpif-por-tramos.md`.
 
@@ -11,12 +19,13 @@ No implementar todavía el modelo por tramos salvo autorización explícita post
 Rothermel, ZAFM40, WAF, LFMC, solver 2D, spotting y otras ampliaciones científicas son I+D+i futura y no deben incorporarse al MVP por iniciativa propia.
 
 ## Antes de cambiar código
-1. Lee `README.md`.
-2. Lee `docs/DOCUMENTACION_TECNICA.md`.
-3. Lee `docs/adr/0001-demo-vpif-por-tramos.md`.
-4. Lee `docs/VALIDACION_MVP.md`.
-5. Si el cambio afecta a uso, validación o comunicación, lee también `docs/GUIA_FUNDADORES.md`.
-6. Comprueba el estado actual del código y las pruebas; no presupongas que una propuesta descrita en conversaciones externas está aprobada.
+1. Confirma primero la identidad del repositorio según la sección anterior.
+2. Lee `README.md`.
+3. Lee `docs/DOCUMENTACION_TECNICA.md`.
+4. Lee `docs/adr/0001-demo-vpif-por-tramos.md`.
+5. Lee `docs/VALIDACION_MVP.md`.
+6. Si el cambio afecta a uso, validación o comunicación, lee también `docs/GUIA_FUNDADORES.md`.
+7. Comprueba el estado actual del código y las pruebas; no presupongas que una propuesta descrita en conversaciones externas está aprobada.
 
 ## Estructura útil
 - `index.html`: interfaz web activa.

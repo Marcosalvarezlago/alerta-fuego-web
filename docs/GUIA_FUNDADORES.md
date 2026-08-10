@@ -8,142 +8,137 @@
 
 Alerta Fuego es una aplicación web que hace una estimación orientativa del tiempo que tardaría un frente de incendio en recorrer la distancia entre un punto de incendio y una zona vulnerable.
 
-El cálculo combina cuatro datos:
+El cálculo combina distancia, combustible, viento y pendiente a partir del modelo `VPIF = V0 · FV · FP` de José Antonio.
 
-- la distancia;
-- el tipo de combustible o vegetación dominante;
-- la velocidad y dirección del viento;
-- la pendiente y el sentido en que avanza el fuego.
-
-La fórmula implementada es la que se venía usando en el proyecto: velocidad base del combustible multiplicada por los factores de viento y pendiente; después, distancia dividida por esa velocidad.
-
-El documento original del grupo debe conservarse junto al proyecto para poder comprobar de forma independiente las tablas y los textos de actuación. La demo por sí sola no demuestra que el modelo haya sido validado por especialistas.
+La próxima demo mantiene ese modelo como baseline, pero aplicará el cálculo por tramos sobre el corredor foco → zona vulnerable. La especificación interna vigente es `v0.3 prevalidación`; **no es el documento que se enviará tal cual a José Antonio**. Tras la espera breve por posible información de EIKOS se preparará un paquete externo separado y conciso para su revisión.
 
 ---
 
 ## Qué NO es
 
-- **No predice la evolución real de un incendio.** Simplifica un fenómeno que cambia continuamente.
+- **No predice la evolución real completa de un incendio.** Simplifica un fenómeno que cambia continuamente.
 - **No sustituye al 112, INFOEX, bomberos, Protección Civil ni a ninguna autoridad.**
 - **No sirve para apurar una salida ni para justificar quedarse.**
 - **No es una validación profesional del terreno, del combustible ni del viento.**
-- **No está validada para cualquier país.** IGN y SIGPAC aportan datos para el ámbito español.
+- **No debe presentarse como adecuado para incendios complejos en fase avanzada.**
+
+La restricción prudencial de Dirección para el MVP es orientarlo a **conatos o incendios en fase inicial de expansión, con un frente dominante y condiciones relativamente simples**. No se afirma una fiabilidad cuantificada y quedan fuera de su pretensión operativa los grandes incendios complejos, múltiples frentes, spotting relevante, fuego de copas, comportamiento extremo y dinámica 2D compleja.
 
 Ante peligro real, llama al 112 y sigue las instrucciones oficiales aunque contradigan la estimación de la aplicación.
 
 ---
 
-## Cómo se usa la demo
+## Qué hace hoy la demo publicada
 
-1. Se abre la web en móvil u ordenador.
-2. Se marca el punto del incendio en el mapa.
-3. Se marca la zona que se quiere proteger.
-4. Se revisan o introducen pendiente, viento y combustible.
-5. Se pulsa **Calcular alerta**.
+La versión publicada todavía usa:
 
-Los puntos también pueden fijarse con coordenadas, algunos enlaces de Google Maps o, para la zona vulnerable, con «Mi ubicación».
+1. un combustible para el trayecto completo;
+2. una pendiente calculada entre los extremos;
+3. un viento para el cálculo;
+4. SIGPAC como sugerencia de ocupación del suelo que la persona puede confirmar/corregir.
 
-La aplicación no debería calcular mientras falte un dato necesario. Usar un dato automático no elimina la obligación de comprobar si tiene sentido con lo que se ve y se conoce del terreno.
-
----
-
-## Qué muestra el resultado
-
-- **Rojo — riesgo:** la zona queda en la dirección principal usada para el viento.
-- **Amarillo — alerta lateral:** un cambio de dirección puede llevar el frente hacia la zona.
-- **Verde — sin riesgo directo según ese viento:** no significa que la zona sea segura; el viento y el incendio pueden cambiar.
-- Distancia entre los dos puntos.
-- Velocidad de propagación calculada por el modelo.
-- Tiempo estimado y escenario temporal.
-- Recomendaciones asociadas al escenario.
-
-Los textos de actuación también deben revisarse con el equipo fundador y con criterio competente en emergencias. Que estén incorporados en la app no los convierte por sí solo en instrucciones oficiales.
+Ese comportamiento actual debe distinguirse del diseño de la próxima demo.
 
 ---
 
-## Los datos automáticos y sus límites
+## Próxima demo por tramos
 
-### Viento
+La arquitectura decidida es:
 
-Open-Meteo ofrece una estimación de modelo meteorológico en el punto del incendio. No es un anemómetro colocado allí ni una observación directa. La aplicación convierte la dirección meteorológica «desde» en la dirección «hacia» la que empujaría el frente y conserva temporalmente la consulta.
+```text
+foco → corredor → segmentos → cálculo por tramo → suma de tiempos → ETA
+```
 
-Si el viento automático no está disponible o ha caducado, hay que reintentar o volver al modo manual. El cálculo no debe continuar usando un viento automático antiguo como si fuera actual.
+La propuesta interna de prevalidación usa:
 
-### Pendiente
+```text
+VPIF_i = V0_i · FV_s · FP_i
 
-La aplicación obtiene la elevación del incendio y de la zona mediante IGN; si no puede, intenta Open-Meteo. Con esos dos extremos calcula una pendiente media sencilla.
+t_i = d_i / VPIF_i
 
-Esto no dibuja el perfil completo entre ambos puntos. Un barranco, una cresta o varios cambios de ladera pueden quedar ocultos. Por eso la pendiente automática es provisional y la interfaz debe indicar la fuente utilizada.
+ETA_s = Σ t_i
+```
 
-Si esta consulta falla, hay que reintentar o elegir la pendiente manualmente.
+`FV_s` es, de momento, un candidato de diseño para un escenario meteorológico estático del corredor. José Antonio debe validar la interpretación final del viento y de los cuadrantes.
 
-### Combustible y SIGPAC
-
-SIGPAC informa de la ocupación oficial del suelo en el punto del incendio. No sabe necesariamente qué especie hay, cuánta biomasa existe, si está seca ni cómo continúa la vegetación hasta la zona protegida.
-
-Por prudencia, SIGPAC **solo sugiere**. La persona debe confirmar el combustible, y una consulta fallida no impide elegirlo manualmente.
-
-El criterio acordado con José para esta fase es:
-
-| Ocupación SIGPAC | Velocidad base propuesta |
-|---|---:|
-| PS — pastizal | 3 m/min |
-| PR o MT — pasto arbustivo/matorral | 6 m/min |
-| PA — pasto con arbolado | 3 m/min |
-| FO — forestal | 8 m/min |
-
-Es una clasificación conservadora por ocupación, no una identificación botánica. Los usos sin correspondencia acordada deben elegirse manualmente. Al mover el punto del incendio hay que repetir la consulta; una sugerencia pertenece al punto en el que se obtuvo.
+Los ~30 m son una referencia de integración/segmentación, **no** una afirmación de que combustible o viento tengan 30 m de precisión temática.
 
 ---
 
-## Qué pasa si falla internet o una fuente
+## Pendiente
 
-- Si falla **viento** o **pendiente** mientras están en automático, el cálculo queda bloqueado hasta reintentar o pasar a manual.
-- Si falla **SIGPAC**, se mantiene la elección manual de combustible porque su consulta es orientativa.
-- Las teselas del mapa, IGN, SIGPAC, Open-Meteo, Google Maps y el Worker son servicios externos. Su disponibilidad no depende solo del proyecto.
+Para la próxima demo se pretende obtener un perfil de elevación intermedio con MDT IGN/PNOA y calcular la pendiente local por segmentos, en vez de limitarse a la diferencia entre los extremos.
 
-No debe confundirse «el servicio respondió una vez» con «el servicio está garantizado».
+Un fallo de elevación nunca debe convertirse silenciosamente en pendiente 0. El resultado debe degradarse de forma explícita o pasar a un override avanzado.
 
 ---
 
-## Privacidad: qué datos salen del dispositivo
+## Combustible: arquitectura provisional
 
-Al usar funciones automáticas se envían coordenadas a servicios externos:
+El flujo normal de la próxima demo debe ser **automático**: la persona usuaria no tendrá que decidir el combustible durante una situación de emergencia.
 
-- el incendio a Open-Meteo para consultar viento;
-- incendio y zona a IGN, al Worker o a Open-Meteo para calcular elevaciones;
-- el incendio a SIGPAC para consultar ocupación;
-- un enlace corto al Worker y a Google para resolverlo.
+La propuesta interna es:
 
-La aplicación no tiene cuentas ni una base de datos propia, pero los proveedores y alojamientos pueden generar registros conforme a sus políticas. Conviene no introducir ubicaciones sensibles sin conocer este flujo.
+1. **MFE25** como backbone semántico principal: formación, estructura, especies y coberturas.
+2. **SIGPAC** como segunda evidencia acotada: uso/ocupación y límites espaciales; no sustituye a MFE como semántica forestal.
+3. Si varias categorías VPIF son defendibles, usar de forma provisional la de mayor `V0` para no alargar artificialmente el ETA, conservando todas las candidaturas y la regla aplicada.
+4. Si el terreno puede portar combustible pero no encaja en las cuatro categorías, usar únicamente el fallback de cálculo que finalmente valide José Antonio, sin inventar una etiqueta temática.
+5. El modo manual quedará solo como **Configuración avanzada / override explícito**.
+
+Los probes multifuente no demuestran cobertura territorial. Sobre una muestra deliberadamente heterogénea de 65 posiciones/16,25 km, MFE resolvió el 61,54 % de la longitud-proxy y MFE→SIGPAC el 69,23 %. Son cifras de comparación de arquitectura, no porcentajes de Extremadura o España.
+
+### Casos históricos a revisar
+
+La app antigua usó reglas como `PS→pastos`, `PR→matorral`, `PA→Quercus` y `FO→pinar por prudencia`; posteriormente se manejaron también `PS→3`, `PR/MT→6`, `PA→3`, `FO→8` como heurística SIGPAC.
+
+La nueva propuesta separa **qué combustible creemos que existe** de **qué V0 usamos como cota de cálculo**. Por eso `FO` ya no significa pinar automáticamente, `PA` no se fija a Quercus y `TA` no debe convertirse en pastos sin evidencia de cubierta herbácea.
+
+---
+
+## Otras fuentes y ZAFM
+
+- **CLCplus/WorldCover:** control de cobertura/coherencia, no traductor directo a `V0`.
+- **Foto Fija/EIKOS:** señales de vigencia/cambio/confianza. EIKOS está pendiente de posible información adicional de Blanca/MITECO.
+- **ZAFM:** **no está descartado del proyecto**. Queda fuera como motor o fallback directo del `VPIF-v0`, pero se conserva como control científico offline y como fuente candidata para la futura línea `Rothermel + ZAFM40`.
+- **Sentinel-2/LiDAR:** evolución posterior, no dependencia del MVP actual.
+
+No se fusionarán mapas por mayoría ni se hará un crosswalk ad hoc `FBFM40→V0`.
+
+---
+
+## Viento y cuadrantes
+
+La demo actual convierte la dirección meteorológica «desde» a la dirección «hacia» y usa la dirección para clasificar sectores/cuadrantes; `FV` depende de la velocidad y no existe factor angular continuo.
+
+Los probes mostraron que no tiene sentido fingir una muestra meteorológica independiente cada 30 m. La propuesta interna plantea un FV común precautorio por escenario de corredor y escenarios estáticos `t0…+3 h`, pero debe validarlo José Antonio.
+
+También queda pendiente aclarar si los cuadrantes son una heurística operacional de exposición o una aproximación física a la propagación, cómo agregar cambios de dirección a lo largo del corredor y si deben afectar al ETA o solo al mensaje.
+
+---
+
+## Qué debe mostrar un resultado responsable
+
+- Que la cifra es una **estimación orientativa**.
+- Fuente y fecha de los datos automáticos.
+- Candidatos/ambigüedad cuando el combustible no sea inequívoco.
+- Indicación visible de fallback, conflicto o discontinuidad no modelada.
+- Alcance limitado del modelo y ausencia de representación de spotting, copas, comportamiento extremo y frente 2D.
+- 112 y servicios competentes como referencia prioritaria.
+
+Debe eliminarse o reformularse «sin riesgo directo» si puede interpretarse como garantía de seguridad.
 
 ---
 
 ## En qué punto está realmente el proyecto
 
-- Existe una demo web estática que permite recorrer el flujo completo.
-- El cálculo básico, el mapa y las consultas externas están implementados.
-- La correspondencia SIGPAC se ha revisado con José y la demo refleja la tabla de esta guía.
-- La aplicación incorpora pruebas unitarias reproducibles, pero sigue necesitando comprobación visual y con servicios reales, revisión de fuentes y licencias, trazabilidad del documento original y validación operativa independiente.
-- La publicación web y el Worker son despliegues separados; el Worker requiere control de versión para evitar diferencias entre el repositorio y lo que está activo.
+- Existe una demo web funcional, pero el nuevo diseño por tramos **no está implementado**.
+- Los probes técnicos de MFE, SIGPAC, viento y arquitectura multifuente están completados y preservados en Drive.
+- La `v0.3` es una especificación **interna de prevalidación**, no el documento externo para José Antonio.
+- Se esperarán unos días por posible respuesta de Blanca/MITECO sobre EIKOS.
+- Después se preparará un paquete breve de decisiones para José Antonio.
+- Solo tras su revisión se congelará una especificación `v1.0`, se autorizará implementación Codex, se harán pruebas/QA y podrá plantearse despliegue.
 
-La pregunta de esta fase no es solo «¿funciona la pantalla?», sino también:
-
-- ¿El modelo y sus fronteras coinciden con lo acordado?
-- ¿Los textos de actuación son correctos y prudentes?
-- ¿Las sugerencias SIGPAC tienen sentido en los casos conocidos?
-- ¿Qué errores deben impedir presentar un resultado?
-- ¿Qué nivel de validación hace falta antes de ampliar su uso?
-
----
-
-## Ampliación por tramos: propuesta, no función actual
-
-La demo actual usa un único combustible, una pendiente entre extremos y un viento para todo el trayecto. **Todavía no calcula por tramos.**
-
-Se ha propuesto estudiar un muestreo aproximado cada 30 m para construir un perfil con varios segmentos. Esa distancia no está validada ni cerrada. También se han citado MDE, Copernicus y PNOA como posibles fuentes o productos a estudiar, pero todavía hay que decidir qué dato aporta cada uno, con qué resolución, cobertura, licencia y fiabilidad.
-
-La vegetación avanzada queda fuera de este bloque. No se da por hecho que una imagen o un producto geográfico pueda convertirse automáticamente en los cuatro combustibles del modelo sin una metodología específica y validada.
+La pregunta de esta fase ya no es «¿qué fuente más podemos añadir?», sino «¿es coherente y suficientemente prudente esta especificación para que José Antonio la corrija y podamos validarla?».
 
 ---
 

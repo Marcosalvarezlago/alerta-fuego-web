@@ -10,10 +10,11 @@ Demo web estática para estimar de forma orientativa el tiempo de llegada de un 
 - Mapa Leaflet con OpenStreetMap y Esri World Imagery.
 - Viento modelizado mediante Open-Meteo.
 - Elevaciones mediante IGN, con reserva Open-Meteo.
-- Ocupación del suelo mediante SIGPAC, siempre como sugerencia confirmable.
+- Ocupación del suelo mediante SIGPAC en la versión actualmente publicada.
 - Cloudflare Worker versionado en `infra/worker.js`.
 - Lógica pura y pruebas reproducibles con Node.
 - Modelo por tramos **todavía no implementado**, pero **decidido como arquitectura de la próxima demo**.
+- Existe una especificación interna de prevalidación `v0.3`; **no es el documento que se enviará directamente a José Antonio**. Primero se preparará un paquete breve específico para su revisión.
 - Validación operativa externa **no acreditada por el repositorio**.
 
 La demo publicada se encuentra en [GitHub Pages](https://marcosalvarezlago.github.io/alerta-fuego-web/). Su disponibilidad y la del Worker deben comprobarse por separado.
@@ -56,44 +57,59 @@ El trayecto completo usa hoy un solo combustible, una pendiente calculada entre 
 
 ## Próxima demo planificada
 
-La siguiente demo mantendrá el modelo de José Antonio, pero lo aplicará **por tramos**:
+La siguiente demo mantendrá el modelo de José Antonio y lo aplicará **por tramos**. La propuesta interna de prevalidación vigente es:
 
 ```text
-VPIF_i = V0_i · FV_i · FP_i
+VPIF_i = V0_i · FV_s · FP_i
 
 t_i = d_i / VPIF_i
 
-ETA = Σ t_i
+ETA_s = Σ t_i
 ```
+
+`FV_s` representa un escenario meteorológico estático común al corredor. Esta formulación, los escenarios `t0…+3 h`, el tratamiento de cuadrantes y los fallbacks de combustible siguen pendientes de revisión con José Antonio.
 
 Decisiones de diseño ya adoptadas:
 
 - pendiente por tramos sobre el perfil foco → zona vulnerable;
 - cálculo acumulativo de tiempos parciales;
+- combustible automático en el flujo normal, con trazabilidad y override manual solo avanzado;
 - Rothermel queda fuera de este lanzamiento y pasa a I+D+i futura;
 - la implementación no comienza hasta cerrar la especificación y revisarla con José Antonio.
 
-El detalle y las cuestiones abiertas están en [ADR 0001](docs/adr/0001-demo-vpif-por-tramos.md).
+No debe confundirse una segmentación aproximada de 30 m con precisión temática de 30 m de la cartografía de combustible o del viento.
 
-## Combustible y SIGPAC
+## Alcance prudencial del MVP
 
-La revisión con José estableció históricamente estas correspondencias por ocupación:
+Dirección limita provisionalmente el uso pretendido del modelo a **conatos o incendios en fase inicial de expansión y escenarios relativamente simples con un frente dominante**. Esta delimitación es una restricción de producto y seguridad, no una afirmación de fiabilidad cuantificada.
 
-| Código | V0 |
-|---|---:|
-| PS | 3 |
-| PR / MT | 6 |
-| PA | 3 |
-| FO | 8 |
+La demo no debe presentarse como adecuada para incendios complejos en fase avanzada, múltiples frentes, spotting/pavesas relevantes, fuego de copas, comportamiento extremo o dinámica espacial 2D compleja.
 
-SIGPAC no identifica la vegetación real con detalle suficiente para decidir por sí solo. Para la próxima demo se probará **MFE25 como fuente semántica principal de combustible por tramo**, con Foto Fija como posible señal de vigencia/cambio y SIGPAC como apoyo/fallback. Esta arquitectura todavía debe superar el preflight técnico y la revisión de José Antonio.
+## Combustible y fuentes cartográficas
 
-No debe inferirse precisión temática de 30 m por el hecho de muestrear una línea cada ~30 m.
+La aplicación antigua utilizó heurísticas SIGPAC simples; se conservan como antecedente, no como verdad de combustible. La propuesta interna tras los probes de 2026 es:
+
+1. **MFE25** como backbone semántico principal para construir candidatos VPIF a partir de formación, estructura, especies y coberturas.
+2. **SIGPAC** como segunda evidencia acotada de uso/ocupación y delimitación espacial; no sustituye a MFE en terreno forestal y no se resuelven conflictos por mayoría de mapas.
+3. Ante varias categorías VPIF plausibles, seleccionar la de mayor `V0` como regla conservadora inicial, conservando candidatos, fuente, regla y confianza.
+4. Ante combustible no tipificado, la especificación interna propone una cota conservadora de cálculo separada de la etiqueta temática; debe validarla José Antonio antes de producción.
+5. CLCplus/WorldCover, Foto Fija/EIKOS y ZAFM se reservan principalmente para control, vigencia o validación offline en este MVP, no como traductores runtime directos a `V0`.
+
+El probe multifuente utilizó 65 posiciones sobre 16,25 km de corredores deliberadamente heterogéneos: MFE produjo candidato defendible en el 61,54 % de esa longitud-proxy y la jerarquía MFE→SIGPAC llegó al 69,23 %. **Estas cifras son comparativas del ensayo y no representan cobertura de Extremadura ni de España.**
+
+### Estado de ZAFM
+
+ZAFM **no está descartado del proyecto**. Se descarta únicamente como motor/fallback directo del MVP `VPIF-v0` y cualquier crosswalk ad hoc `FBFM40 → V0`. Se conserva como control científico offline y como fuente candidata prioritaria para la futura línea `Rothermel + ZAFM40`.
 
 ## Cuestiones pendientes de confirmación con José Antonio
 
+- Confirmar la arquitectura acumulativa por tramos.
 - El documento original describe el matorral aproximadamente como `2–5 m/min`, pero usa `V0 = 6 m/min`.
-- Confirmar si la dirección del viento afecta únicamente al escenario espacial o también a la velocidad de propagación.
+- Validar `max(V0)` entre candidatos plausibles y la política para combustible no tipificado.
+- Revisar los casos históricos SIGPAC (`PS`, `PR/MT`, `PA`, `FO`, `TA` y usos fuera de taxonomía).
+- Aclarar el significado físico u operacional de los cuadrantes y si afectan al ETA o solo al mensaje.
+- Confirmar el tratamiento del viento por escenarios y la agregación espacial.
+- Confirmar el alcance prudencial de uso: conatos/fase inicial frente a incendios complejos avanzados.
 - Revisar el paquete completo de diseño antes de modificar el programa.
 
 ## Datos externos y privacidad

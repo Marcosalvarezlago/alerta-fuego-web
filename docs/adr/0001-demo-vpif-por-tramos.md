@@ -90,7 +90,7 @@ Antes de publicar la siguiente versión debe revisarse el lenguaje que pueda imp
 
 ## Fuentes canónicas externas al repositorio
 
-- Especificación interna de prevalidación en Google Drive: `Especificación_demo_VPIF_por_tramos_v0.3_prevalidación_JA_2026-08-09`.
+- Especificación interna de prevalidación en Google Drive: `Especificación_interna_demo_VPIF_por_tramos_v0.3_prevalidación_2026-08-09`.
 - Registro científico y de decisiones en Google Drive: `Registro_decisiones_hipótesis_preguntas_abiertas_10_Ciencia_y_modelo_2026-08-08`.
 - Evidencia técnica: `Preflight_MVP_2026-08-08`, incluidos `DESIGN_PROBE_FUEL_WIND` y `DESIGN_PROBE_MULTISOURCE_FUEL`.
 - Notion `🔥 Alerta Fuego`: planificación temporal, oportunidades y estado operativo.

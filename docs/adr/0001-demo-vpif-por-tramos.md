@@ -1,7 +1,7 @@
 # ADR 0001 — Demo VPIF por tramos
 
 **Fecha:** 2026-08-08  
-**Estado:** Aceptado como dirección de diseño; implementación pendiente de revisión final con José Antonio.
+**Estado actualizado 2026-09-26:** Aceptado; RC1 provisional implementada localmente para validación técnica. Revisión de José Antonio pendiente; no desplegada ni validada científicamente.
 
 ## Contexto
 
@@ -26,7 +26,7 @@ ETA = Σ t_i
 Se incorporará **cálculo por tramos** antes del siguiente lanzamiento.
 
 - **Pendiente:** perfil intermedio por tramos, con MDT IGN/PNOA como referencia preferente.
-- **Combustible:** se cerrará antes de implementar. La arquitectura preferente a probar es MFE25 como fuente semántica principal por tramo; Foto Fija como señal de vigencia/cambio cuando sea viable; SIGPAC como apoyo/fallback; corrección manual ante ambigüedad.
+- **Combustible RC1:** SIGPAC determina el dominio. MFE25 aporta candidatos semánticos solo en FO/PR/MT/PA. FO no equivale a pinar. Las reglas max(V0), no tipificado V0=8 con evidencia y gap t=0 son provisionales para revisión experta. Foto Fija queda fuera de runtime.
 - **Viento:** se mantiene la estructura del modelo de José Antonio. No se añadirá un factor angular nuevo sin validación.
 - **Rothermel:** queda fuera de este lanzamiento y pasa a I+D+i futura, preservando `VPIF-v0` como baseline.
 
@@ -36,7 +36,7 @@ No debe confundirse una segmentación aproximada de 30 m con precisión temátic
 
 1. El documento original describe el matorral aproximadamente como `2–5 m/min`, pero usa `V0 = 6 m/min`. Confirmar el valor operativo.
 2. Confirmar si la dirección del viento afecta únicamente a la clasificación espacial del escenario o también a la velocidad de propagación.
-3. Revisar el paquete completo de diseño antes de modificar el programa.
+3. Revisar la RC1 tangible antes de consolidar la especificación v1.0; confirmar max(V0), V0 no tipificado, gaps, FV espacial y presentación de ETA.
 
 ## Seguridad
 
@@ -47,8 +47,8 @@ Antes de publicar la siguiente versión debe revisarse el lenguaje que pueda imp
 ## Consecuencias
 
 - La investigación Rothermel/ZAFM/MFE/EIKOS no se pierde: queda registrada como programa I+D+i, pero no bloquea la demo.
-- Codex no debe implementar todavía el modelo por tramos. Primero realizará un preflight read-only y después se cerrará una especificación para José Antonio.
-- Tras la revisión de José Antonio se consolidará la especificación y se autorizará explícitamente la implementación.
+- El preflight de agosto de 2026 se cerró y Dirección autorizó una RC1 local provisional. La revisión de José Antonio ocurre sobre el producto tangible antes de consolidar v1.0.
+- Implementar y probar localmente no autoriza push, publicación del asset, Worker ni GitHub Pages.
 - Cambios posteriores que alteren el modelo científico, seguridad o arquitectura de datos requieren nueva decisión de Dirección.
 
 ## Fuentes canónicas externas al repositorio

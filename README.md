@@ -6,14 +6,14 @@ Demo web estática para estimar de forma orientativa el tiempo de llegada de un 
 
 ## Estado del proyecto
 
-- Aplicación de una sola página en `index.html`, sin compilación.
+- Demo global en `index.html` y piloto RC1 local en `rc1.html`, sin compilación.
 - Mapa Leaflet con OpenStreetMap y Esri World Imagery.
 - Viento modelizado mediante Open-Meteo.
 - Elevaciones mediante IGN, con reserva Open-Meteo.
 - Ocupación del suelo mediante SIGPAC, siempre como sugerencia confirmable.
 - Cloudflare Worker versionado en `infra/worker.js`.
 - Lógica pura y pruebas reproducibles con Node.
-- Modelo por tramos **todavía no implementado**, pero **decidido como arquitectura de la próxima demo**.
+- RC1 por tramos **implementada provisionalmente para pruebas locales con asset piloto interno**; no desplegada ni validada científicamente.
 - Validación operativa externa **no acreditada por el repositorio**.
 
 La demo publicada se encuentra en [GitHub Pages](https://marcosalvarezlago.github.io/alerta-fuego-web/). Su disponibilidad y la del Worker deben comprobarse por separado.
@@ -24,9 +24,13 @@ La demo publicada se encuentra en [GitHub Pages](https://marcosalvarezlago.githu
 .
 ├── AGENTS.md
 ├── index.html
+├── rc1.html
 ├── package.json
 ├── src/
-│   └── core.js
+│   ├── core.js
+│   ├── rc1-geometry.js / rc1-overlay.js
+│   ├── rc1-fuel.js / rc1-engine.js
+│   └── rc1-providers.js / rc1-run.js
 ├── tests/
 ├── .github/
 │   └── workflows/test.yml
@@ -52,18 +56,18 @@ VPIF = V0 · FV · FP
 tiempo = distancia / VPIF
 ```
 
-El trayecto completo usa hoy un solo combustible, una pendiente calculada entre los extremos y un viento. La documentación técnica contiene las fronteras exactas que ejecuta el código.
+La demo publicada (`index.html`) usa un solo combustible, una pendiente entre extremos y un viento. El piloto local (`rc1.html`) integra por tramos y conserva ese cálculo global como referencia histórica.
 
-## Próxima demo planificada
+## RC1 provisional por tramos
 
-La siguiente demo mantendrá el modelo de José Antonio, pero lo aplicará **por tramos**:
+La RC1 mantiene el modelo de José Antonio y lo aplica **por tramos**:
 
 ```text
-VPIF_i = V0_i · FV_i · FP_i
+VPIF_i,s = V0_i · FV_s · FP_i
 
-t_i = d_i / VPIF_i
+t_i,s = d_i / VPIF_i,s
 
-ETA = Σ t_i
+ETA_s = Σ t_i,s
 ```
 
 Decisiones de diseño ya adoptadas:
@@ -71,13 +75,13 @@ Decisiones de diseño ya adoptadas:
 - pendiente por tramos sobre el perfil foco → zona vulnerable;
 - cálculo acumulativo de tiempos parciales;
 - Rothermel queda fuera de este lanzamiento y pasa a I+D+i futura;
-- la implementación no comienza hasta cerrar la especificación y revisarla con José Antonio.
+- la implementación local se revisará técnicamente antes de pasar a José Antonio; sus decisiones científicas siguen provisionales.
 
 El detalle y las cuestiones abiertas están en [ADR 0001](docs/adr/0001-demo-vpif-por-tramos.md).
 
 ## Combustible y SIGPAC
 
-La revisión con José estableció históricamente estas correspondencias por ocupación:
+La demo global histórica conserva estas correspondencias por ocupación; **no son la regla de la RC1**:
 
 | Código | V0 |
 |---|---:|
@@ -86,7 +90,7 @@ La revisión con José estableció históricamente estas correspondencias por oc
 | PA | 3 |
 | FO | 8 |
 
-SIGPAC no identifica la vegetación real con detalle suficiente para decidir por sí solo. Para la próxima demo se probará **MFE25 como fuente semántica principal de combustible por tramo**, con Foto Fija como posible señal de vigencia/cambio y SIGPAC como apoyo/fallback. Esta arquitectura todavía debe superar el preflight técnico y la revisión de José Antonio.
+En RC1, SIGPAC decide primero el dominio: PS→pastos; PR/MT→candidato matorral; PA→candidato pastos; FO no tiene V0 directo. MFE25 solo añade semántica en FO/PR/MT/PA. Los candidatos múltiples conservan su etiqueta ambigua y usan provisionalmente max(V0). El piloto genera un asset local desde un subconjunto real SIGPAC+MFE25; no está publicado ni empaquetado como PMTiles.
 
 No debe inferirse precisión temática de 30 m por el hecho de muestrear una línea cada ~30 m.
 
@@ -94,7 +98,7 @@ No debe inferirse precisión temática de 30 m por el hecho de muestrear una lí
 
 - El documento original describe el matorral aproximadamente como `2–5 m/min`, pero usa `V0 = 6 m/min`.
 - Confirmar si la dirección del viento afecta únicamente al escenario espacial o también a la velocidad de propagación.
-- Revisar el paquete completo de diseño antes de modificar el programa.
+- Revisar max(V0), cota de combustible positivo no tipificado, t_gap=0, agregación espacial FV y presentación de ETA por sector antes de consolidar v1.0.
 
 ## Datos externos y privacidad
 
@@ -108,6 +112,10 @@ Las funciones automáticas envían coordenadas o enlaces a servicios externos:
 No hay cuentas ni base de datos propia en esta demo, pero los proveedores pueden registrar solicitudes conforme a sus políticas. Antes de una difusión mayor deben mantenerse las atribuciones y condiciones de Open-Meteo/Copernicus, IGN/CNIG, SIGPAC/FEGA, OpenStreetMap y Esri.
 
 ## Desarrollo local
+
+Para probar `rc1.html`, sirve el repositorio por HTTP local, abre la página y carga el asset piloto interno generado en `C:\Users\marco\Documents\Alerta Fuego\audit_output\rc1_fuel_pilot_internal.json`. El asset no se versiona ni publica por ahora. La página acepta un Worker RC1 local para `/perfil` (MDT05); si no está disponible, puede usarse el fallback Open-Meteo/GLO-90 marcándolo explícitamente. Fuera del área del asset o con combustible/MDT/viento NoData, la ETA automática queda indeterminada. Los detalles por segmento se descargan como JSON.
+
+El pipeline `scripts/build_rc1_pilot.py` usa GDAL ya disponible en el entorno `alerta-gis` y requiere un GeoJSON de recintos SIGPAC, MFE25 SHP y bbox explícito. No instala dependencias ni crea PMTiles. Para publicar un derivado regional faltan ingestión completa de recintos, generalización/topología, empaquetado PMTiles, medición de tamaño y revisión jurídica de condiciones MFE25. [SIGPAC publica recintos bajo CC BY 4.0](https://sigpac-hubcloud.es/html/sdsigpac/descServicio.html); la licencia específica MFE25 del derivado debe confirmarse antes de distribuirlo.
 
 No hay proceso de compilación. Para evitar limitaciones del esquema `file://`, sirve la raíz con cualquier servidor HTTP estático y abre `index.html` desde `localhost`.
 

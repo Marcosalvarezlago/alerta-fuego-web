@@ -178,7 +178,8 @@
 
   <header>
     <h1>🔥 Alerta Fuego</h1>
-    <span class="tag">Demo experimental</span>
+    <span class="tag">Demo global histórica · experimental</span>
+    <a href="./rc1.html" style="color:#fff;text-decoration:underline;font-size:.8rem">Abrir RC1 por tramos (piloto interno)</a>
     <span class="aviso">No sustituye a emergencias: ante peligro llama al <strong>112</strong>.</span>
   </header>
 
@@ -419,9 +420,9 @@ const TEXTO_CUADRANTE = {
   },
   sin_riesgo: {
     clase: "seguro",
-    etiqueta: "Exposición baja según viento actual",
-    titulo: "Sin riesgo directo",
-    desc: "Con la dirección de viento actual, la zona vulnerable no está en la trayectoria principal del frente. El viento puede cambiar: mantén vigilancia."
+    etiqueta: "Exposición según el viento considerado",
+    titulo: "Fuera del sector principal según el viento considerado",
+    desc: "La zona no está en el sector principal de propagación por el viento consultado. El viento y el comportamiento del incendio pueden cambiar; mantén vigilancia y sigue indicaciones oficiales."
   }
 };
 
@@ -441,7 +442,7 @@ const NOMBRE_CUADRANTE = {
   riesgo: "riesgo",
   alerta_derecha: "alerta (lado derecho)",
   alerta_izquierda: "alerta (lado izquierdo)",
-  sin_riesgo: "sin riesgo directo"
+  sin_riesgo: "fuera del sector principal según el viento considerado"
 };
 
 const NOMBRE_ESCENARIO = {

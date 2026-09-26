@@ -1,6 +1,6 @@
 # Alerta Fuego — Guía para el equipo fundador
 
-*Documento para revisar la demo y decidir qué debe validarse antes de presentarla como herramienta fiable.*
+*Documento para revisar la demo global histórica y la candidata RC1 local por tramos. Ninguna está validada como herramienta fiable de emergencia.*
 
 ---
 
@@ -51,7 +51,7 @@ La aplicación no debería calcular mientras falte un dato necesario. Usar un da
 
 - **Rojo — riesgo:** la zona queda en la dirección principal usada para el viento.
 - **Amarillo — alerta lateral:** un cambio de dirección puede llevar el frente hacia la zona.
-- **Verde — sin riesgo directo según ese viento:** no significa que la zona sea segura; el viento y el incendio pueden cambiar.
+- **Fuera del sector principal según el viento considerado:** no significa que la zona sea segura; el viento y el incendio pueden cambiar.
 - Distancia entre los dos puntos.
 - Velocidad de propagación calculada por el modelo.
 - Tiempo estimado y escenario temporal.
@@ -83,14 +83,14 @@ SIGPAC informa de la ocupación oficial del suelo en el punto del incendio. No s
 
 Por prudencia, SIGPAC **solo sugiere**. La persona debe confirmar el combustible, y una consulta fallida no impide elegirlo manualmente.
 
-El criterio acordado con José para esta fase es:
+La demo global histórica conserva este criterio; la RC1 usa una arquitectura distinta:
 
 | Ocupación SIGPAC | Velocidad base propuesta |
 |---|---:|
 | PS — pastizal | 3 m/min |
 | PR o MT — pasto arbustivo/matorral | 6 m/min |
 | PA — pasto con arbolado | 3 m/min |
-| FO — forestal | 8 m/min |
+| FO — forestal | 8 m/min en la demo histórica; sin V0 directo en RC1 |
 
 Es una clasificación conservadora por ocupación, no una identificación botánica. Los usos sin correspondencia acordada deben elegirse manualmente. Al mover el punto del incendio hay que repetir la consulta; una sugerencia pertenece al punto en el que se obtuvo.
 
@@ -137,13 +137,13 @@ La pregunta de esta fase no es solo «¿funciona la pantalla?», sino también:
 
 ---
 
-## Ampliación por tramos: propuesta, no función actual
+## RC1 por tramos: piloto local provisional
 
-La demo actual usa un único combustible, una pendiente entre extremos y un viento para todo el trayecto. **Todavía no calcula por tramos.**
+`index.html` sigue usando un combustible, una pendiente entre extremos y un viento. `rc1.html` recorre un corredor 1D, corta sus fronteras SIGPAC/MFE25, integra segmentos de hasta 30 m, usa pendiente firmada de perfil y cuatro escenarios horarios de viento. Cada tramo aporta su tiempo a la ETA. Los 30 m son separación de integración, no precisión del mapa de combustible.
 
-Se ha propuesto estudiar un muestreo aproximado cada 30 m para construir un perfil con varios segmentos. Esa distancia no está validada ni cerrada. También se han citado MDE, Copernicus y PNOA como posibles fuentes o productos a estudiar, pero todavía hay que decidir qué dato aporta cada uno, con qué resolución, cobertura, licencia y fiabilidad.
+El piloto real disponible cubre solo una pequeña zona de Badajoz y su asset se carga desde archivo local. Un FO no se convierte automáticamente en pinar; los conflictos se muestran como ambiguos. Sin información suficiente, la ETA queda indeterminada salvo entrada manual explícita. Las discontinuidades inequívocas se registran con tiempo cero como convención de cálculo: **no significa que el fuego atraviese una barrera instantáneamente**. Puede usarse Open-Meteo Elevation como respaldo visible si el MDT05 no responde.
 
-La vegetación avanzada queda fuera de este bloque. No se da por hecho que una imagen o un producto geográfico pueda convertirse automáticamente en los cuatro combustibles del modelo sin una metodología específica y validada.
+Dirección decidió implementar RC1 antes de la revisión con José Antonio. Quedan para su criterio: max(V0) en mezclas, V0=8 para combustible positivo no tipificado, t_gap=0, viento espacial prudencial, presentación de ETA por sector y discrepancia histórica del matorral 2–5 frente a 6 m/min. La RC1 no está desplegada ni validada científicamente; ninguna ETA debe interpretarse como tiempo seguro.
 
 ---
 

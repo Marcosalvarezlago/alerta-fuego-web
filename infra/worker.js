@@ -5,6 +5,7 @@
 //   GET /resolver?url=https://maps.app.goo.gl/XXXX
 //   GET /elevaciones?lats=LAT1,LAT2&lons=LON1,LON2
 //   GET /sigpac?lat=LAT&lon=LON
+//   POST /perfil  {puntos:[{lat,lon}, ...]} — MDT05 por ventanas WCS
 //
 // /resolver valida la URL inicial, cada redirección y la URL final
 // para impedir que el Worker se convierta en un proxy abierto.
@@ -27,7 +28,7 @@ const COBERTURA_IGN = "Elevacion4258_5"; // MDT 5 m en lat/lon (EPSG:4258)
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type"
 };
 
@@ -248,16 +249,120 @@ async function elevacionIGN(lat, lon) {
   return parsearArcGrid(texto);
 }
 
+// ArcGrid completo: la posición de las celdas se deriva de su propia cabecera.
+// NoData permanece null y nunca se interpreta como terreno llano.
+export function parsearArcGridPerfil(texto, puntos) {
+  const lines = texto.trim().split(/\r?\n/);
+  const head = {};
+  let index = 0;
+  while (index < lines.length && /^[A-Za-z_]+\s/.test(lines[index].trim())) {
+    const [key, value] = lines[index].trim().split(/\s+/);
+    head[key.toLowerCase()] = Number(value);
+    index++;
+  }
+  const { ncols, nrows } = head;
+  const dx = head.dx ?? head.cellsize;
+  const dy = head.dy ?? head.cellsize;
+  const x0 = head.xllcorner ?? (head.xllcenter - dx / 2);
+  const y0 = head.yllcorner ?? (head.yllcenter - dy / 2);
+  if (![ncols, nrows, dx, dy, x0, y0].every(Number.isFinite) ||
+      ncols < 1 || nrows < 1 || ncols * nrows > 100000 || dx <= 0 || dy <= 0) {
+    throw new Error('ArcGrid inválido');
+  }
+  const rows = lines.slice(index).map(line => line.trim().split(/\s+/).map(Number));
+  if (rows.length !== nrows || rows.some(row => row.length !== ncols)) throw new Error('ArcGrid incompleto');
+  return puntos.map(({ lat, lon }) => {
+    const col = Math.floor((lon - x0) / dx);
+    const row = nrows - 1 - Math.floor((lat - y0) / dy);
+    if (col < 0 || col >= ncols || row < 0 || row >= nrows) return null;
+    const z = rows[row][col];
+    return Number.isFinite(z) && z !== head.nodata_value && z > -999 ? z : null;
+  });
+}
+
+function distanciaAproxM(a, b) {
+  const dy = (b.lat - a.lat) * 111195;
+  const dx = (b.lon - a.lon) * 111195 * Math.cos((a.lat + b.lat) * Math.PI / 360);
+  return Math.hypot(dx, dy);
+}
+
+export function ventanasPerfil(puntos) {
+  const result = [];
+  let from = 0;
+  for (let i = 1; i < puntos.length; i++) {
+    if (distanciaAproxM(puntos[from], puntos[i]) > 900) {
+      result.push({ from, to: i });
+      from = i;
+    }
+  }
+  result.push({ from, to: puntos.length - 1 });
+  return result;
+}
+
+async function perfilIGN(puntos) {
+  const elevaciones = Array(puntos.length).fill(null);
+  for (const { from, to } of ventanasPerfil(puntos)) {
+    const subset = puntos.slice(from, to + 1);
+    const midLat = subset.reduce((s, p) => s + p.lat, 0) / subset.length;
+    const padLat = 10 / 111195;
+    const padLon = 10 / (111195 * Math.cos(midLat * Math.PI / 180));
+    const minLon = Math.min(...subset.map(p => p.lon)) - padLon;
+    const maxLon = Math.max(...subset.map(p => p.lon)) + padLon;
+    const minLat = Math.min(...subset.map(p => p.lat)) - padLat;
+    const maxLat = Math.max(...subset.map(p => p.lat)) + padLat;
+    // La cobertura 4258 usa celdas angulares: elegir el paso más fino para
+    // que ni el eje Este-Oeste exceda aproximadamente 5 m en esta latitud.
+    const step = Math.min(5 / 111195, 5 / (111195 * Math.cos(midLat * Math.PI / 180)));
+    const width = Math.max(3, Math.ceil((maxLon - minLon) / step));
+    const height = Math.max(3, Math.ceil((maxLat - minLat) / step));
+    if (width * height > 100000 || width > 512 || height > 512) throw new Error('perfil demasiado grande');
+    const url = WCS_IGN + '?service=WCS&version=1.0.0&request=GetCoverage' +
+      '&coverage=' + COBERTURA_IGN + '&crs=EPSG:4258&bbox=' +
+      [minLon, minLat, maxLon, maxLat].join(',') +
+      '&width=' + width + '&height=' + height + '&interpolationMethod=bilinear&format=ArcGrid';
+    const response = await fetchConTiempo(url, {}, 15000);
+    if (!response.ok) throw new Error('IGN HTTP ' + response.status);
+    if (Number(response.headers.get('content-length')) > 2000000) throw new Error('respuesta IGN demasiado grande');
+    const body = await response.text();
+    if (body.length > 2000000 || body.includes('ServiceException') || body.includes('<?xml')) {
+      throw new Error('respuesta IGN inválida');
+    }
+    const z = parsearArcGridPerfil(body, subset);
+    z.forEach((value, j) => { elevaciones[from + j] = value; });
+  }
+  return elevaciones;
+}
+
 export default {
   async fetch(request) {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS });
     }
+    const url = new URL(request.url);
+    if (url.pathname === '/perfil' && request.method === 'POST') {
+      if (Number(request.headers.get('content-length')) > 20000) return json({ error: 'cuerpo demasiado grande' }, 413);
+      let body;
+      try { body = await request.text(); } catch { return json({ error: 'cuerpo inválido' }, 400); }
+      if (body.length > 20000) return json({ error: 'cuerpo demasiado grande' }, 413);
+      let puntos;
+      try { puntos = JSON.parse(body).puntos; } catch { return json({ error: 'JSON inválido' }, 400); }
+      if (!Array.isArray(puntos) || puntos.length < 2 || puntos.length > 256 || puntos.some(p =>
+        !p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon) ||
+        p.lat < -90 || p.lat > 90 || p.lon < -180 || p.lon > 180)) {
+        return json({ error: 'puntos inválidos' }, 400);
+      }
+      if (puntos.slice(1).some((p, i) => distanciaAproxM(puntos[i], p) > 100) ||
+          puntos.reduce((sum, p, i) => i ? sum + distanciaAproxM(puntos[i - 1], p) : 0, 0) > 5000) {
+        return json({ error: 'corredor fuera de límites' }, 400);
+      }
+      try {
+        const elevaciones = await perfilIGN(puntos);
+        return json({ elevaciones, fuente: 'IGN MDT05 WCS', nodata: elevaciones.map(x => x === null) });
+      } catch (e) { return json({ error: 'perfil IGN no disponible: ' + e.message }, 502); }
+    }
     if (request.method !== "GET") {
       return json({ error: "método no permitido" }, 405, { Allow: "GET, OPTIONS" });
     }
-
-    const url = new URL(request.url);
 
     // ------------------- /resolver -------------------
     if (url.pathname === "/resolver") {

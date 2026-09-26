@@ -14,7 +14,7 @@ Este repositorio contiene la aplicación web activa de Alerta Fuego. Codex ejecu
 ## Mandato actual
 La siguiente demo debe conservar el modelo de José Antonio `VPIF = V0 · FV · FP` e incorporar **cálculo por tramos** antes del siguiente lanzamiento. La decisión está registrada en `docs/adr/0001-demo-vpif-por-tramos.md`.
 
-No implementar todavía el modelo por tramos salvo autorización explícita posterior a la revisión con José Antonio. La misión inmediata de Codex es un **preflight técnico sin cambios de código** para cerrar combustible, perfil topográfico, proveedores y divergencias repo↔despliegue.
+Dirección autorizó la **implementación provisional RC1 por tramos antes de la revisión con José Antonio**. La secuencia vigente es RC1 local → validación técnica interna → revisión experta → correcciones → especificación v1.0 → validación posterior → eventual despliegue autorizado. Los cambios locales RC1 no equivalen a despliegue ni validación científica.
 
 Rothermel, ZAFM40, WAF, LFMC, solver 2D, spotting y otras ampliaciones científicas son I+D+i futura y no deben incorporarse al MVP por iniciativa propia.
 
@@ -40,8 +40,8 @@ Rothermel, ZAFM40, WAF, LFMC, solver 2D, spotting y otras ampliaciones científi
 
 ## Restricciones científicas y de producto
 - La implementación actual de `VPIF = V0 · FV · FP` sigue siendo una estimación orientativa no validada profesionalmente.
-- El cálculo por tramos está decidido para la próxima demo, pero su especificación final debe quedar revisada antes de implementarse.
-- Para combustible, MFE25 es el candidato principal a probar; Foto Fija puede aportar vigencia/cambio; SIGPAC queda como apoyo/fallback. No conviertas esta preferencia en código sin completar el preflight y la revisión de Dirección.
+- La RC1 por tramos se implementa con supuestos provisionales del preflight de agosto de 2026. José Antonio revisará el producto tangible antes de la especificación v1.0.
+- SIGPAC determina el dominio; MFE25 aporta semántica solo en dominios forestales/naturales habilitados. No usar FO→pinar ni precedencia global MFE→SIGPAC.
 - No inventes equivalencias silenciosas entre MFE/Anderson/ZAFM y las categorías operativas de José Antonio.
 - No confundas longitud de muestreo con precisión temática de la cartografía.
 - No conviertas hipótesis o notas exploratorias en comportamiento de producción por iniciativa propia.
@@ -53,7 +53,7 @@ Rothermel, ZAFM40, WAF, LFMC, solver 2D, spotting y otras ampliaciones científi
 ## Cuestiones reservadas para revisión con José Antonio
 - Incoherencia documental: matorral `2–5 m/min` frente a `V0 = 6 m/min`.
 - Confirmar si la dirección del viento afecta solo a la clasificación espacial del escenario o también a la velocidad.
-- Confirmar el paquete completo de diseño antes de modificar el programa.
+- Revisar max(V0) entre candidatos, V0=8 para combustible positivo no tipificado, t_gap=0, máximo espacial FV y presentación de ETA por sector antes de consolidar v1.0.
 
 ## Calidad
 - Ejecuta `npm test` tras cambios de lógica.

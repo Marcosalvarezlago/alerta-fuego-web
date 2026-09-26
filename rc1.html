@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Alerta Fuego · RC1 por tramos (piloto interno)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
+<style>
+  :root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#17212d;background:#f4f6f8}
+  *{box-sizing:border-box} body{margin:0} header{background:#6f1d1b;color:white;padding:18px 22px}
+  h1{font-size:1.4rem;margin:0 0 5px} h2{font-size:1.1rem;margin:0 0 12px} p{margin:6px 0;line-height:1.5}
+  main{max-width:1200px;margin:0 auto;padding:18px;display:grid;gap:16px;grid-template-columns:minmax(300px,360px) 1fr}
+  section{background:white;border:1px solid #dce1e6;border-radius:12px;padding:16px;min-width:0}
+  #map{height:420px;border-radius:8px} label{display:block;font-weight:600;font-size:.88rem;margin:10px 0 4px}
+  input,select,button{font:inherit} input[type=text],input[type=file],select{width:100%;padding:8px;border:1px solid #abb6c3;border-radius:7px}
+  input[type=checkbox]{width:auto} .check{display:flex;align-items:start;gap:8px;font-weight:400}
+  button{border:0;border-radius:8px;background:#9f2520;color:white;padding:10px 14px;cursor:pointer;font-weight:700}
+  button:disabled{background:#aab3bd;cursor:wait} .muted{font-size:.84rem;color:#596677}
+  .alert{background:#fff0db;border-left:4px solid #d68e1d;padding:10px;border-radius:5px}
+  .error{background:#ffe8e8;border-left:4px solid #bf2525;padding:10px;border-radius:5px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px}
+  .card{background:#f5f7fa;border:1px solid #dce1e6;padding:12px;border-radius:8px}
+  .card strong{font-size:1.2rem} table{border-collapse:collapse;width:100%;font-size:.8rem}
+  th,td{border-bottom:1px solid #e4e8ec;text-align:left;padding:6px} .scroll{overflow:auto;max-height:340px}
+  @media(max-width:800px){main{display:block}section{margin-bottom:16px}#map{height:310px}}
+</style>
+</head>
+<body>
+<header><h1>Alerta Fuego · RC1 por tramos</h1><p>Piloto interno experimental. ETA orientativa; no es tiempo seguro. Ante peligro, llama al 112 y sigue a los servicios competentes.</p></header>
+<main>
+<section>
+  <h2>Corredor y fuentes</h2>
+  <p class="muted">Selecciona un asset piloto interno. Haz clic en el mapa para marcar primero el foco y después la zona vulnerable, o escribe coordenadas. Alcance: conatos, frente dominante, corredor 1D y condiciones relativamente simples.</p>
+  <label for="asset">Asset SIGPAC + MFE25 local</label><input id="asset" type="file" accept=".json,application/json">
+  <div id="asset-info" class="muted">Sin asset cargado.</div>
+  <label for="foco">Foco (lat, lon)</label><input id="foco" type="text" value="38.84320, -6.72050">
+  <label for="objetivo">Zona vulnerable (lat, lon)</label><input id="objetivo" type="text" value="38.84320, -6.72020">
+  <label for="worker">Worker local RC1 para MDT05 (opcional)</label><input id="worker" type="text" placeholder="http://localhost:8787">
+  <label class="check"><input id="fallback" type="checkbox" checked> Permitir fallback explícito Open-Meteo Elevation/GLO-90 si el MDT05 no está disponible.</label>
+  <label for="manual">Combustible manual para tramos sin clase (opcional)</label>
+  <select id="manual"><option value="">Bloquear ETA si falta combustible</option><option value="pastos">Pastos · 3 m/min</option><option value="quercus">Quercus · 4 m/min</option><option value="matorral">Matorral · 6 m/min</option><option value="pinar">Pinar · 8 m/min</option></select>
+  <p class="muted">La selección manual se aplica solo a tramos sin clase. El valor 8 para combustible no tipificado requiere evidencia positiva; nunca cubre NoData puro. Los 30 m son intervalo de integración, no precisión de la cartografía.</p>
+  <button id="calcular">Calcular RC1</button>
+  <p id="estado" role="status"></p>
+</section>
+<section>
+  <div id="map"></div>
+  <div id="resultado"><p class="muted">Carga un asset y calcula un corredor para ver los cuatro escenarios horarios.</p></div>
+</section>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+<script type="module">
+import { ejecutarRc1 } from './src/rc1-run.js';
+import { formatearTiempo } from './src/core.js';
+const $ = id => document.getElementById(id);
+const map = L.map('map').setView([38.8432,-6.7202],16);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+let asset=null, active=null, version=0, marks=[], route=null, nextPoint='foco';
+function parsePoint(text){
+  const m=text.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,;]\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if(!m) throw new Error('Coordenadas: lat, lon');
+  const p={lat:Number(m[1]),lon:Number(m[2])};
+  if(p.lat < -90||p.lat>90||p.lon < -180||p.lon>180) throw new Error('Coordenadas fuera de rango');
+  return p;
+}
+function invalidate(){version++;active?.abort();active=null;$('calcular').disabled=false;$('resultado').innerHTML='<p class="muted">Corredor cambiado: vuelve a calcular.</p>';}
+function updateMap(){
+  marks.forEach(m=>map.removeLayer(m));marks=[];if(route)map.removeLayer(route);
+  try{
+    const a=parsePoint($('foco').value),b=parsePoint($('objetivo').value);
+    marks=[L.marker([a.lat,a.lon]).bindPopup('Foco').addTo(map),L.marker([b.lat,b.lon]).bindPopup('Zona vulnerable').addTo(map)];
+    route=L.polyline([[a.lat,a.lon],[b.lat,b.lon]],{color:'#c32720',weight:4}).addTo(map);
+    map.fitBounds(route.getBounds().pad(.3),{maxZoom:17});
+  }catch{route=null;}
+}
+for(const id of ['foco','objetivo','worker']) $(id).addEventListener('input',invalidate);
+for(const id of ['foco','objetivo']) $(id).addEventListener('change',updateMap);
+for(const id of ['fallback','manual']) $(id).addEventListener('change',invalidate);
+map.on('click',e=>{const id=nextPoint;nextPoint=id==='foco'?'objetivo':'foco';$(id).value=`${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`;invalidate();updateMap()});
+$('asset').addEventListener('change',async e=>{
+  invalidate();const token=version;asset=null;
+  try{
+    const file=e.target.files[0];if(!file)return;
+    const value=JSON.parse(await file.text());
+    if(token!==version)return;
+    if(!Array.isArray(value.sigpac)||!Array.isArray(value.mfe)||!Array.isArray(value.bbox))throw new Error('Formato de asset inválido');
+    asset=value;$('asset-info').textContent=`${value.asset_id} · ${value.sigpac.length} recintos · ${value.mfe.length} polígonos MFE · ${(file.size/1024).toFixed(1)} KB`;
+    const [west,south,east,north]=value.bbox;map.fitBounds([[south,west],[north,east]]);
+  }catch(err){$('asset-info').textContent=`Error: ${err.message}`;}
+});
+function esc(text){return String(text).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}
+function render(result){
+  const first=result.scenarios[0], rows=first.rows;
+  const warnings=[];
+  if(result.profile_fallback)warnings.push('Elevación: fallback Open-Meteo/GLO-90, no MDT05.');
+  if(rows.some(r=>r.conflict))warnings.push('Hay tramos con candidatos o dominios en conflicto.');
+  if(rows.some(r=>r.fallback==='untyped_v0_8'))warnings.push('Combustible no tipificado con cota V0=8.');
+  if(rows.some(r=>r.fallback==='manual_explicit'))warnings.push('Hay combustible introducido manualmente para tramos sin clase.');
+  if(rows.some(r=>r.status==='nodata'))warnings.push('Hay combustible NoData; la ETA queda indeterminada.');
+  const exposureName={riesgo:'sector principal',alerta_derecha:'sector lateral',alerta_izquierda:'sector lateral',sin_riesgo:'fuera del sector principal según el viento considerado'};
+  const cards=result.scenarios.map(s=>`<div class="card"><div>${esc(s.scenario)} · ${esc(s.horaUtc||'hora desconocida')} UTC</div><strong>${s.eta_min===null?'Indeterminada':esc(formatearTiempo(s.eta_min))}</strong><div class="muted">FV ${s.fv??'sin dato'} · ${s.exposure?esc(exposureName[s.exposure.cuadrante]):'exposición indeterminada'}</div></div>`).join('');
+  const table=rows.slice(0,100).map(r=>`<tr><td>${esc(r.segment_id)}</td><td>${r.chainage_start_m.toFixed(1)}–${r.chainage_end_m.toFixed(1)}</td><td>${esc(r.sigpac_codes?.join('/')||'NoData')}</td><td>${esc(r.label||'NoData')}</td><td>${r.v0??'—'}</td><td>${r.slope_signed_pct===null?'NoData':r.slope_signed_pct.toFixed(1)}</td><td>${r.t_i_min===null?'—':r.t_i_min.toFixed(2)}</td></tr>`).join('');
+  $('resultado').innerHTML=`<h2>ETA por escenario</h2><div class="cards">${cards}</div><p class="muted">${result.distance_m.toFixed(1)} m · ${rows.length} tramos · perfil ${esc(result.profile_source)}. ETA y sector de exposición son salidas separadas; fuera del sector principal no implica seguridad.</p>${warnings.map(w=>`<p class="alert">${esc(w)}</p>`).join('')}<p class="alert">Estimación experimental para fase inicial y frente dominante. No modela spotting, fuego de copas, convección extrema ni múltiples frentes. No uses la ETA para apurar una evacuación. Sigue al 112.</p><h2>Trazabilidad (t0)</h2><div class="scroll"><table><thead><tr><th>ID</th><th>m desde foco</th><th>SIGPAC</th><th>Etiqueta</th><th>V0</th><th>Pend. %</th><th>t min</th></tr></thead><tbody>${table}</tbody></table></div><p class="muted">Primeros 100 tramos en pantalla; descarga el registro completo.</p><button id="descargar">Descargar auditoría JSON</button>`;
+  $('descargar').onclick=()=>{const blob=new Blob([JSON.stringify(result,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='vpif-rc1-auditoria.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+}
+$('calcular').addEventListener('click',async()=>{
+  invalidate();const token=version;const controller=new AbortController();active=controller;
+  $('calcular').disabled=true;$('estado').textContent='Consultando perfil y viento…';
+  try{
+    if(!asset)throw new Error('Carga primero el asset SIGPAC+MFE25 local.');
+    const result=await ejecutarRc1(parsePoint($('foco').value),parsePoint($('objetivo').value),asset,{
+      workerUrl:$('worker').value.trim(),permitirFallbackOpenMeteo:$('fallback').checked,
+      manual:$('manual').value||null,signal:controller.signal});
+    if(token!==version)return;
+    render(result);$('estado').textContent='Cálculo terminado.';
+  }catch(err){if(token===version){$('estado').textContent='Error: '+err.message;$('resultado').innerHTML=`<p class="error">${esc(err.message)}</p>`;}}
+  finally{if(token===version){active=null;$('calcular').disabled=false;}}
+});
+updateMap();
+</script>
+</body></html>

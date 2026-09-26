@@ -1,19 +1,19 @@
 # Validación de la próxima demo MVP
 
-**Estado:** planificación. No acredita validación externa ni autoriza despliegue.
+**Estado 2026-09-26:** RC1 local provisional en validación técnica. No acredita validación externa ni autoriza despliegue.
 
 Este documento define las puertas mínimas antes de presentar la siguiente versión de Alerta Fuego como demo pública coherente. No sustituye pruebas científicas ni operativas.
 
-## 1. Gate de especificación
+## 1. Especificación provisional RC1 y gate v1.0
 
-Antes de modificar código:
+Dirección autorizó implementar RC1 antes de la revisión experta. Antes de consolidar v1.0 o publicar:
 
-- [ ] Cerrar especificación `VPIF` por tramos.
-- [ ] Resolver o dejar explícitamente abiertas las reglas de combustible por tramo.
-- [ ] Ejecutar preflight técnico de MFE25/Foto Fija/SIGPAC y perfil MDT IGN/PNOA.
+- [x] Documentar especificación candidata `VPIF` por tramos del preflight.
+- [x] Dejar explícitamente abiertas las reglas provisionales de combustible por tramo.
+- [x] Ejecutar preflight técnico de MFE25/Foto Fija/SIGPAC y perfil MDT IGN/PNOA.
 - [ ] Confirmar con José Antonio el valor de matorral (`2–5` frente a `V0=6`).
 - [ ] Confirmar con José Antonio el papel de la dirección del viento en la velocidad.
-- [ ] Revisar el paquete completo de diseño con José Antonio.
+- [ ] Revisar la RC1 tangible y sus supuestos con José Antonio.
 
 ## 2. Gate de fidelidad científica/documental
 
@@ -30,7 +30,7 @@ Tras implementación:
 
 - [ ] IGN/PNOA: consultas reales verificadas y fuente mostrada.
 - [ ] Fuente elegida para combustible: acceso/latencia/cobertura/fallos documentados.
-- [ ] SIGPAC: solo apoyo/fallback según la especificación.
+- [x] SIGPAC: dominio primero; MFE25 solo semántica en dominios habilitados, probado en piloto local.
 - [ ] Open-Meteo: consulta real, vigencia y trazabilidad verificadas.
 - [ ] Worker desplegado comparado con `infra/worker.js` y versión registrada.
 - [ ] Fallos de proveedores conducen a fallback o bloqueo explícito, nunca a datos obsoletos silenciosos.
@@ -47,7 +47,7 @@ Tras implementación:
 
 - [ ] La interfaz identifica el resultado como estimación orientativa.
 - [ ] No aparecen formulaciones que puedan interpretarse como garantía de seguridad.
-- [ ] Revisar y, si procede, sustituir «sin riesgo directo».
+- [x] Sustituir «sin riesgo directo» en los textos visibles de la rama local; revisar la presentación final con expertos.
 - [ ] 112/servicios competentes siguen siendo la referencia prioritaria.
 - [ ] Los protocolos/textos no inducen a retrasar evacuación ni a permanecer en una zona comprometida.
 - [ ] Las principales limitaciones del modelo quedan visibles o accesibles.
@@ -71,7 +71,7 @@ Tras implementación:
 
 La versión solo pasa a **demo pública** cuando:
 
-1. José Antonio haya revisado la especificación del modelo;
+1. José Antonio haya revisado la RC1 tangible y la especificación v1.0 resultante;
 2. los cambios estén implementados y cubiertos por pruebas;
 3. los proveedores reales hayan superado smoke tests;
 4. seguridad, lenguaje, atribuciones y privacidad hayan sido revisados;

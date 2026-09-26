@@ -1,6 +1,6 @@
 # Alerta Fuego — Documentación técnica
 
-*Estado: demo web funcional en fase de validación. Este documento separa expresamente lo que está implementado de lo que solo está propuesto.*
+*Estado 2026-09-26: demo global histórica en `index.html` y candidata RC1 local en `rc1.html`. La RC1 está implementada y probada técnicamente en un piloto; no desplegada, validada científicamente ni revisada por José Antonio. Las secciones 2–9 describen la demo global histórica; la sección 10 describe RC1.*
 
 ---
 
@@ -92,7 +92,7 @@ La dirección automática en grados se convierte a dirección «hacia» sumando 
 - El rumbo incendio→zona se compara con la dirección operativa del viento.
 - Diferencia angular `≤ 45°`: riesgo.
 - Diferencia angular `> 45° y ≤ 135°`: alerta lateral.
-- Diferencia angular `> 135°`: sin riesgo directo según el viento usado.
+- Diferencia angular `> 135°`: fuera del sector principal según el viento considerado.
 - El tiempo se normaliza hacia abajo a minutos enteros para no mostrar más margen que el calculado; el texto y el escenario usan ese mismo entero.
 - Escenarios: `≤ 30 min`, `≤ 60 min`, `≤ 90 min` y vigilancia preventiva por encima.
 
@@ -157,7 +157,7 @@ La consulta usa la ruta oficial `recinfobypoint/[srid]/[lon]/[lat].json`. Si el 
 - Los puntos, la dirección y velocidad del viento, la pendiente, su sentido y el combustible deben quedar definidos antes de calcular.
 - Un fallo de viento o pendiente en modo automático bloquea el cálculo hasta reintentar o volver a manual.
 - SIGPAC no bloquea porque su papel es consultivo.
-- En el cuadrante «sin riesgo directo» se presenta vigilancia preventiva en vez del protocolo temporal principal.
+- En el sector opuesto se presenta vigilancia preventiva en vez del protocolo temporal principal (demo global histórica).
 - La cabecera y el resultado recuerdan que la referencia real son el 112 y los servicios competentes.
 
 La intención de diseño es invalidar cualquier resultado cuando cambie una entrada. Esa propiedad debe cubrir también actualizaciones explícitas de datos automáticos y respuestas que lleguen tarde; forma parte de las comprobaciones necesarias antes de una validación externa.
@@ -245,21 +245,21 @@ Pendiente antes de presentar la herramienta como lista para distribución:
 
 ---
 
-## 10. Ampliación por tramos — no implementada
+## 10. RC1 provisional por tramos — implementada localmente
 
-El modelo actual calcula todo el trayecto con un único combustible, una pendiente entre extremos y un viento. **No existe todavía lógica por tramos en la demo.**
+`rc1.html` carga un asset SIGPAC+MFE25 local elegido por el usuario. `src/rc1-overlay.js` corta una línea geodésica por fronteras de polígonos y `src/rc1-geometry.js` subdivide cada intervalo temático en tramos ≤30 m, con residual real y chainage. Los 30 m son intervalo de integración, no precisión temática. En límites se conservan todos los recintos/candidatos.
 
-La ampliación planteada estudia:
+`src/rc1-fuel.js` aplica SIGPAC→dominio y MFE25→candidatos solo en FO/PR/MT/PA. PS aporta pastos=3; PR/MT matorral=6; PA pastos=3; FO no tiene V0 directo. P1/Q1/M1/PI1 usan campos MFE reales. Candidatos múltiples: max(V0) para cálculo con etiqueta ambigua. Evidencia positiva de combustible sin clase puede usar V0=8 con etiqueta no tipificada. NoData o fallo no se convierten a V0=8. AG/CA/ED/ZU inequívocos son discontinuidades con t_gap=0 provisional; IM/EP/ZC/ZV no lo son. Un combustible manual explícito cubre solo tramos sin clase. Matorral=6 se conserva provisionalmente pese a la discrepancia histórica 2–5 frente a 6 m/min.
 
-- muestrear la línea incendio→zona aproximadamente cada 30 m;
-- construir un perfil de elevación y pendiente por segmento;
-- asignar ocupación o combustible por segmento;
-- incorporar variación temporal del viento;
-- combinar tiempos parciales sin ocultar la incertidumbre acumulada.
+`infra/worker.js` añade `POST /perfil`: valida ≤256 puntos y ≤5 km, divide el corredor en ventanas WCS aproximadamente kilométricas y muestrea MDT05 IGN en ArcGrid. El parser admite cabeceras `dx/dy` observadas en la respuesta real. NoData conserva null. El cliente reintenta de forma acotada y puede usar Open-Meteo Elevation/GLO-90 únicamente como fallback visible. El Worker nuevo **no se ha desplegado**.
 
-Los 30 m son una propuesta de diseño, no una resolución validada. También son propuestas pendientes de selección y validación las fuentes o productos MDE, Copernicus y PNOA. Antes de implementar hay que acordar cobertura, resolución efectiva, licencias, tratamiento de datos ausentes, coste de consultas y validación del nuevo cálculo.
+`src/rc1-providers.js` obtiene Open-Meteo `wind_speed_10m` y `wind_direction_10m` por hora UTC y hasta siete puntos del corredor; cada escenario t0,+1,+2,+3 h usa una única banda FV, la máxima espacial de esa hora. No se mezclan horas ni se crea viento cada 30 m. El viento es modelizado a 10 m, no observación local ni viento a media llama.
 
-La clasificación avanzada de vegetación queda **fuera de este bloque**. No se presupone que PNOA, Copernicus u otra fuente permitan convertir automáticamente vegetación real en los cuatro combustibles del modelo sin una metodología específica y validada.
+`src/rc1-engine.js` calcula pendiente firmada `(z_fin-z_inicio)/distancia`, FP=0,7 descenso; 1 llano/subida <20 %; 1,5 subida 20–40 %; 2 subida >40 %. Después calcula `VPIF_i,s=V0_i·FV_s·FP_i`, `t_i,s=d_i/VPIF_i,s` y suma sin redondeos. ETA y exposición direccional son salidas separadas, disponibles en todos los sectores. NoData de viento, combustible o elevación indetermina la ETA automática. Cada escenario conserva registro por segmento, fuentes, versiones, reglas, conflictos, fallbacks y flags.
+
+El piloto interno `audit_output/rc1_fuel_pilot_internal.json` está fuera del repositorio: bbox de aproximadamente 0,27×0,28 km en Badajoz, 17 recintos SIGPAC, 4 polígonos MFE25, 21.070 bytes. `scripts/build_rc1_pilot.py` documenta su derivación con hashes. No hay PMTiles regional ni cobertura de España completa. Antes de distribución se requiere pipeline de recintos completos, teselado con topología validada, medición y confirmación de licencia MFE25. SIGPAC indica CC BY 4.0; el aviso general de reutilización de MITECO no sustituye la comprobación de condiciones específicas del dataset/derivado.
+
+La validación interna ejecutó `npm test` (30/30), un corredor real de 25,98 m con SIGPAC PR + MFE Quercus, MDT05 y Open-Meteo (ETA t0 2,8869 min) y smoke tests aislados de proveedores. Esto verifica aritmética e integración de un piloto, **no** exactitud predictiva ni seguridad operativa. La demo global publicada conserva el cálculo antiguo; no se ha hecho push ni despliegue.
 
 ---
 

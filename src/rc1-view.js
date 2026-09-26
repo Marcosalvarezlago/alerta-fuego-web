@@ -64,7 +64,9 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, NOMBRE_CUADRANTE,
     `<div class="tramos-wrap"><table class="tramos"><thead><tr><th>#</th><th>Recorrido</th>` +
     `<th>Combustible y regla</th><th>V0</th><th>Pendiente</th><th>VPIF</th><th>Tiempo</th>` +
     `</tr></thead><tbody>${filas}</tbody></table></div></div></details>` +
-    `<div class="recordatorio"><strong>Recordatorio:</strong> estimación experimental y orientativa. ` +
+    `<div class="recordatorio"><strong>Recordatorio:</strong> estimación experimental y orientativa, ` +
+    `concebida para conatos o fases iniciales con un frente dominante; no modeliza pavesas, ` +
+    `fuego de copas ni frentes múltiples. ` +
     `No apures los tiempos ni permanezcas en una zona comprometida. Sigue las indicaciones oficiales. ` +
     `Ante peligro: <strong>112</strong>.</div>`;
   const resumen = document.getElementById('resumen');

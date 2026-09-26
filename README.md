@@ -18,6 +18,8 @@ Demo web para estimar de forma orientativa el tiempo de llegada de un frente de 
 
 La demo publicada se encuentra en [GitHub Pages](https://marcosalvarezlago.github.io/alerta-fuego-web/). Su disponibilidad y la del Worker deben comprobarse por separado.
 
+El alcance previsto de la demo experimental son conatos o incendios en fase inicial y escenarios simples con un frente dominante. No modeliza múltiples frentes, pavesas, fuego de copas ni dinámica espacial 2D compleja.
+
 ## Estructura
 
 ```text

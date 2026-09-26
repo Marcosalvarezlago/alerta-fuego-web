@@ -139,6 +139,8 @@ La pregunta de esta fase no es solo «¿funciona la pantalla?», sino también:
 
 ## RC1 por tramos: demo provisional
 
+El uso previsto para esta demo experimental se limita a conatos o incendios en fase inicial con un frente dominante. No modeliza múltiples frentes, pavesas, fuego de copas ni dinámica espacial compleja.
+
 La web conserva mapa, marcadores, editor de coordenadas, geolocalización, cuadrantes y protocolos de la versión anterior. Al pulsar “Calcular alerta”, `index.html` recorre un corredor 1D, corta sus fronteras SIGPAC y MFE25 cuando está disponible, integra segmentos de hasta 30 m, usa pendiente firmada de perfil y cuatro escenarios horarios de viento. Cada tramo aporta su tiempo a la ETA. Los 30 m son separación de integración, no precisión del mapa de combustible.
 
 El combustible automático usa SIGPAC; en local puede añadir MFE25 si está instalado, mientras que la web pública no lo distribuye. No hay que elegir un fichero ni escribir la URL de un Worker. También pueden elegirse por separado pendiente, viento y combustible manuales. Un FO sin clase MFE no se convierte en pinar: recibe provisionalmente V0=8 con etiqueta de “combustible no tipificado”. Viñedo, olivar y otros cultivos permanentes reciben la misma hipótesis prudente. Sin evidencia suficiente, la ETA queda indeterminada. Las discontinuidades inequívocas se registran con tiempo cero como convención de cálculo: **no significa que el fuego atraviese una barrera instantáneamente**. Puede usarse Open-Meteo Elevation como respaldo visible si el MDT05 no responde. [Reglas provisionales](RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).

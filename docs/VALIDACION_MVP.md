@@ -47,6 +47,7 @@ Tras implementación:
 
 - [ ] La interfaz identifica el resultado como estimación orientativa.
 - [ ] No aparecen formulaciones que puedan interpretarse como garantía de seguridad.
+- [ ] El alcance previsto de conatos/fase inicial y los fenómenos no modelizados son accesibles en la interfaz.
 - [x] Sustituir «sin riesgo directo» en los textos visibles de la rama local; revisar la presentación final con expertos.
 - [ ] 112/servicios competentes siguen siendo la referencia prioritaria.
 - [ ] Los protocolos/textos no inducen a retrasar evacuación ni a permanecer en una zona comprometida.
@@ -64,7 +65,7 @@ Tras implementación:
 
 - [ ] Atribuciones y licencias de las fuentes usadas revisadas.
 - [ ] Flujo de coordenadas a terceros explicado de forma coherente con la implementación.
-- [ ] Alcance geográfico y nivel de validación no se exageran.
+- [ ] Alcance geográfico y nivel de validación no se exageran; no se extrapola el piloto de Extremadura a toda España.
 - [ ] No se presenta la demo como herramienta oficial ni profesional de predicción.
 
 ## 8. Criterio de salida

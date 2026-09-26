@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alerta Fuego — demo experimental</title>
+<title>Alerta Fuego — VPIF por tramos</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
 <style>
@@ -156,6 +156,7 @@
   .metrica .v{font-size:1.28rem;font-weight:900;margin:2px 0}
   .metrica .s{font-size:.78rem;color:var(--gris);line-height:1.3}
   .datos-usados{font-size:.84rem;color:#334155;background:var(--fondo);border:1px solid var(--borde);border-radius:12px;padding:9px 12px;margin-bottom:10px}
+  .datos-usados .mini-nota{color:var(--gris);font-size:.78rem;margin-top:4px}
   details.bloque{border:1px solid var(--borde);border-radius:12px;padding:9px 12px;margin-bottom:10px;background:#fff}
   details.bloque summary{cursor:pointer;font-weight:800;font-size:.9rem}
   details.bloque ul{margin:8px 0 2px;padding-left:20px}
@@ -163,6 +164,13 @@
   details.bloque .tec{font-size:.84rem;color:#334155;line-height:1.6;margin-top:8px}
   .recordatorio{border-radius:12px;padding:11px 13px;background:#111827;color:#f8fafc;font-size:.84rem;line-height:1.45}
   .recordatorio strong{color:#fed7aa}
+  .escenarios{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px}
+  .escenario{border:1px solid var(--borde);border-radius:12px;padding:9px;background:var(--fondo)}
+  .escenario b{display:block;font-size:1.05rem;margin:3px 0}
+  .escenario small{color:var(--gris)}
+  .tramos{width:100%;border-collapse:collapse;font-size:.8rem}
+  .tramos th,.tramos td{padding:6px;text-align:left;border-bottom:1px solid var(--borde)}
+  .tramos-wrap{overflow-x:auto}
 
   @media (max-width:480px){
     header .aviso{margin-left:0;width:100%}
@@ -178,8 +186,7 @@
 
   <header>
     <h1>🔥 Alerta Fuego</h1>
-    <span class="tag">Demo global histórica · experimental</span>
-    <a href="./rc1.html" style="color:#fff;text-decoration:underline;font-size:.8rem">Abrir RC1 por tramos (piloto interno)</a>
+    <span class="tag">VPIF por tramos · RC1 experimental</span>
     <span class="aviso">No sustituye a emergencias: ante peligro llama al <strong>112</strong>.</span>
   </header>
 
@@ -278,7 +285,8 @@
 
         <div class="seccion-datos">
           <div class="cab-seccion"><span>Combustible</span></div>
-          <div class="grid-datos">
+          <div id="comb-auto" class="auto-card">Se identificará automáticamente a lo largo del corredor al calcular. Fuentes: SIGPAC y MFE25 local si está disponible. Las dudas quedarán señaladas en cada tramo.</div>
+          <div class="grid-datos" hidden>
             <div class="campo">
               <label for="in-comb">Tipo dominante entre incendio y zona</label>
               <select id="in-comb">
@@ -316,6 +324,8 @@ window.CONFIG_RESOLVER = "https://alerta-fuego-enlaces.marcosalvarez1w.workers.d
 </script>
 <script type="module">
 import * as Core from "./src/core.js";
+import { ejecutarRc1Automatico } from "./src/rc1-run.js?v=integrada-2";
+import { pintarResultadoRc1 } from "./src/rc1-view.js?v=integrada-3";
 
 "use strict";
 // Modelo, geometría, conversiones y parser: fuente única comprobable en src/core.js.
@@ -470,8 +480,9 @@ const estado = {
   zona: null,
   objetivo: "fuego",
   resultado: null,
-  vientoAuto: { activo: false, cargando: false, datos: null, error: null, caducado: false },
-  penAuto: { activo: false, cargando: false, datos: null, error: null },
+  vientoAuto: { activo: true, cargando: false, datos: null, error: null, caducado: false },
+  penAuto: { activo: true, cargando: false, datos: null, error: null },
+  rc1Cargando: false,
   editor: null,
   // Marca si el usuario ha tocado los sliders manuales (sin valor operativo hasta entonces)
   velElegida: false,
@@ -763,6 +774,8 @@ function renderVientoAuto() {
   const card = document.getElementById("viento-auto");
   card.hidden = !va.activo;
   if (!va.activo) return;
+  card.innerHTML = "Pronóstico horario Open-Meteo para t0, +1 h, +2 h y +3 h, consultado a lo largo del corredor al calcular.";
+  return;
 
   if (!estado.fuego) {
     card.innerHTML = "Fija primero el punto del <b>incendio</b>: el viento se consulta en esa ubicación." +
@@ -793,6 +806,8 @@ function renderPendienteAuto() {
   const card = document.getElementById("pen-auto");
   card.hidden = !pa.activo;
   if (!pa.activo) return;
+  card.innerHTML = "Perfil de elevación IGN MDT05 por tramos. Si IGN falla, se identifica explícitamente el respaldo de Open-Meteo.";
+  return;
 
   if (!estado.fuego || !estado.zona) {
     card.innerHTML = "Fija <b>incendio</b> y <b>zona vulnerable</b>: la pendiente se estima entre ambos puntos." +
@@ -848,8 +863,6 @@ let capasCalculo = [];
 
 function alCambiarPunto(tipo) {
   invalidarResultado();
-  if (tipo === "fuego" && estado.vientoAuto.activo) actualizarVientoAuto();
-  if (estado.penAuto.activo) actualizarPendienteAuto();
   if (tipo === "fuego") {
     invalidarSigpacPorCambioIncendio();
     renderSigpac();
@@ -896,11 +909,15 @@ function limpiarCapasCalculo() {
 }
 
 function invalidarResultado() {
-  if (estado.resultado === null) return;
+  rc1Control?.abort();
+  rc1Control = null;
+  estado.rc1Cargando = false;
   estado.resultado = null;
   limpiarCapasCalculo();
   document.getElementById("resultado").classList.remove("abierto");
   document.getElementById("resumen").style.display = "none";
+  document.getElementById("comb-auto").textContent =
+    "Se identificará automáticamente a lo largo del corredor al calcular. Fuentes: SIGPAC y MFE25 local si está disponible. Las dudas quedarán señaladas en cada tramo.";
 }
 
 let temporizadorCaducidadViento = null;
@@ -1010,43 +1027,59 @@ function leerEntradas() {
   };
 }
 
-function calcular() {
+let rc1Control = null;
+
+async function calcular() {
   const bloqueos = motivosBloqueo();
-  if (bloqueos.length > 0) {
-    renderVientoAuto();
-    refrescar();
-    return;
-  }
-  const ent = leerEntradas();
-  const r = Core.evaluarAlertaFuego({
-    latFuego: estado.fuego.lat, lonFuego: estado.fuego.lon,
-    latZona: estado.zona.lat, lonZona: estado.zona.lon,
-    direccionVientoHacia: ent.direccionVientoHacia,
-    velocidadVientoKmh: ent.velocidadVientoKmh,
-    tipoCombustible: ent.tipoCombustible,
-    pendientePct: ent.pendientePct,
-    sentidoLadera: ent.sentidoLadera
-  });
-  estado.resultado = {
-    distanciaM: r.distanciaM,
-    rumboFuegoZona: r.rumboFuegoZona,
-    direccionVientoGrados: r.direccionVientoGrados,
-    diferenciaFirmada: r.diferenciaFirmada,
-    cuadrante: r.cuadrante,
-    v0: r.v0, fv: r.fv, fp: r.fp, vpif: r.vpif,
-    tiempoMin: r.tiempoMin,
-    tiempoTexto: r.tiempoTexto,
-    escenario: r.escenario,
-    entradas: ent,
-    vientoAutoDatos: estado.vientoAuto.activo ? estado.vientoAuto.datos : null,
-    penAutoDatos: estado.penAuto.activo ? estado.penAuto.datos : null
-  };
-  dibujarCuadrantes(r);
-  pintarResultado();
-  document.getElementById("inputs").classList.remove("abierto");
-  document.getElementById("btn-datos").textContent = "Datos ▾";
-  document.getElementById("resultado").classList.add("abierto");
+  if (bloqueos.length) { refrescar(); return; }
+  invalidarResultado();
+  const controller = new AbortController();
+  rc1Control = controller;
+  estado.rc1Cargando = true;
+  document.getElementById("comb-auto").textContent = "Identificando usos y combustibles a lo largo del corredor…";
   refrescar();
+  try {
+    const pendienteManual = estado.penAuto.activo ? null :
+      (+document.getElementById("in-pen").value) *
+      (document.getElementById("in-sentido").value === "bajando" ? -1 :
+       document.getElementById("in-sentido").value === "llano" ? 0 : 1);
+    const vientoManual = estado.vientoAuto.activo ? null : {
+      haciaGrados: Core.resolverDireccionGrados(document.getElementById("in-dir").value),
+      velocidadKmh: +document.getElementById("in-vel").value
+    };
+    const r = await ejecutarRc1Automatico(estado.fuego, estado.zona, {
+      apiBase: window.location.origin, signal: controller.signal,
+      pendienteManual, vientoManual
+    });
+    if (rc1Control !== controller || controller.signal.aborted) return;
+    estado.resultado = r;
+    const desde = r.scenarios[0].rows[0]?.wind_points?.[0]?.direccionDesdeGrados;
+    if (Number.isFinite(desde)) dibujarCuadrantes({
+      direccionVientoGrados: Core.direccionHaciaDesdeMeteo(desde), distanciaM: r.distance_m
+    });
+    pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, NOMBRE_CUADRANTE,
+      PROTOCOLOS, formatearMetros });
+    document.getElementById("inputs").classList.remove("abierto");
+    document.getElementById("btn-datos").textContent = "Datos ▾";
+    document.getElementById("resultado").classList.add("abierto");
+    document.getElementById("comb-auto").textContent =
+      `${r.scenarios[0].rows.length} tramos identificados. Abre los detalles técnicos para ver fuentes, reglas y dudas.`;
+  } catch (error) {
+    if (controller.signal.aborted) return;
+    document.getElementById("resultado").innerHTML =
+      '<div class="estado alerta"><div class="etiqueta">Cálculo no disponible</div>' +
+      '<div class="titulo">No se pudo calcular una ETA fiable</div><div class="desc">' +
+      Core.escaparHtml(error.message || String(error)) +
+      '</div></div><div class="recordatorio">Ante peligro inmediato, llama al <strong>112</strong>.</div>';
+    document.getElementById("resultado").classList.add("abierto");
+    document.getElementById("comb-auto").textContent = "La identificación del terreno no está disponible. Reintenta el cálculo.";
+  } finally {
+    if (rc1Control === controller) {
+      rc1Control = null;
+      estado.rc1Cargando = false;
+      refrescar();
+    }
+  }
 }
 
 // === PINTADO DEL RESULTADO ===
@@ -1246,31 +1279,25 @@ function usarMiUbicacion() {
 function motivosBloqueo() {
   const motivos = [];
   if (!estado.fuego || !estado.zona) motivos.push("fija el incendio y la zona vulnerable en el mapa");
+  if (estado.fuego && estado.zona && Core.calcularDistanciaM(
+    estado.fuego.lat, estado.fuego.lon, estado.zona.lat, estado.zona.lon) > 5000) {
+    motivos.push("el corredor RC1 admite hasta 5 km");
+  }
+  if (estado.rc1Cargando) motivos.push("calculando por tramos…");
 
   const va = estado.vientoAuto, pa = estado.penAuto;
 
   // Viento
-  if (va.activo) {
-    marcarVientoCaducadoSiProcede();
-    if (va.cargando) motivos.push("consultando viento…");
-    else if (va.caducado) motivos.push("el viento automático ha caducado (actualízalo o pasa a manual)");
-    else if (!va.datos && estado.fuego) motivos.push("viento automático no disponible (reintenta o pasa a manual)");
-  } else {
+  if (!va.activo) {
     const dirElegida = document.getElementById("in-dir").value !== "";
     if (!dirElegida || !estado.velElegida) motivos.push("elige dirección y velocidad del viento");
   }
 
   // Pendiente
-  if (pa.activo) {
-    if (pa.cargando) motivos.push("consultando elevaciones…");
-    else if (!pa.datos && estado.fuego && estado.zona) motivos.push("pendiente automática no disponible (reintenta o pasa a manual)");
-  } else {
+  if (!pa.activo) {
     const sentidoElegido = document.getElementById("in-sentido").value !== "";
     if (!estado.penElegida || !sentidoElegido) motivos.push("elige la pendiente y el sentido de la ladera");
   }
-
-  // Combustible (siempre manual)
-  if (document.getElementById("in-comb").value === "") motivos.push("elige el combustible");
 
   return motivos;
 }
@@ -1301,7 +1328,7 @@ function refrescar() {
   if (motivos.length > 0) {
     hintCalc.textContent = "Para calcular: " + motivos.join(" · ") + ".";
   } else if (estado.resultado === null) {
-    hintCalc.textContent = "Todo listo. Revisa los datos si lo necesitas y pulsa Calcular alerta.";
+    hintCalc.textContent = "Todo listo. SIGPAC, MFE25, perfil y viento se consultan automáticamente al calcular.";
   } else {
     hintCalc.textContent = "";
   }
@@ -1375,12 +1402,12 @@ document.getElementById("resumen").addEventListener("click", function () {
 document.getElementById("chk-viento-auto").addEventListener("change", function (e) {
   estado.vientoAuto.activo = e.target.checked;
   invalidarResultado();
-  actualizarVientoAuto();
+  renderVientoAuto(); refrescar();
 });
 document.getElementById("chk-pen-auto").addEventListener("change", function (e) {
   estado.penAuto.activo = e.target.checked;
   invalidarResultado();
-  actualizarPendienteAuto();
+  renderPendienteAuto(); refrescar();
 });
 
 function marcarVelElegida() {
@@ -1419,6 +1446,8 @@ document.getElementById("in-pen").addEventListener("input", function (e) {
 renderVientoAuto();
 renderPendienteAuto();
 renderSigpac();
+document.getElementById("chk-viento-auto").checked = true;
+document.getElementById("chk-pen-auto").checked = true;
 refrescar();
 </script>
 </body>

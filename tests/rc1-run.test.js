@@ -49,3 +49,17 @@ test('cambio de foco/objetivo cancela consultas en curso y evita respuesta obsol
 test('cobertura del asset evita usar datos temáticos fuera del piloto', async () => {
   await assert.rejects(ejecutarRc1(inicio, { lat: 1, lon: 1 }, asset), /fuera de la cobertura/);
 });
+
+test('cultivo permanente y FO sin MFE usan V0 prudente; tierra arable queda indeterminada', async () => {
+  for (const [uso, expectedV0] of [['VI', 8], ['FO', 8], ['TA', null]]) {
+    const copy = structuredClone(asset);
+    copy.sigpac[0].properties.uso = uso;
+    const result = await ejecutarRc1(inicio, fin, copy, {
+      pendienteManual: 0, vientoManual: { haciaGrados: 90, velocidadKmh: 10 }, now,
+      fetcher: () => { throw new Error('no debe consultar proveedores con entradas manuales'); }
+    });
+    assert.equal(result.scenarios[0].rows[0].v0, expectedV0, uso);
+    assert.equal(result.scenarios[0].eta_min === null, expectedV0 === null, uso);
+    if (expectedV0) assert.equal(result.scenarios[0].rows[0].fallback, 'untyped_v0_8');
+  }
+});

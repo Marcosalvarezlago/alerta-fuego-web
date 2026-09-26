@@ -1,6 +1,6 @@
 # Alerta Fuego — Documentación técnica
 
-*Estado 2026-09-26: demo global histórica en `index.html` y candidata RC1 local en `rc1.html`. La RC1 está implementada y probada técnicamente en un piloto; no desplegada, validada científicamente ni revisada por José Antonio. Las secciones 2–9 describen la demo global histórica; la sección 10 describe RC1.*
+*Estado 2026-09-26: RC1 por tramos integrada en `index.html` local; `rc1.html` redirige a ella. No se ha publicado, validado científicamente ni revisado con José Antonio. Las secciones 2–9 describen el comportamiento global histórico de la versión publicada; la sección 10 describe la copia local actual.*
 
 ---
 
@@ -247,11 +247,11 @@ Pendiente antes de presentar la herramienta como lista para distribución:
 
 ## 10. RC1 provisional por tramos — implementada localmente
 
-`rc1.html` carga un asset SIGPAC+MFE25 local elegido por el usuario. `src/rc1-overlay.js` corta una línea geodésica por fronteras de polígonos y `src/rc1-geometry.js` subdivide cada intervalo temático en tramos ≤30 m, con residual real y chainage. Los 30 m son intervalo de integración, no precisión temática. En límites se conservan todos los recintos/candidatos.
+`index.html` conserva el mapa, marcadores, editor de coordenadas, geolocalización, enlaces de Maps, cuadrantes y protocolos. Invoca `ejecutarRc1Automatico` al calcular. `scripts/serve_rc1_local.py` sirve la web y obtiene de forma interna los recintos SIGPAC OGC y los usos por recinto, corta MFE25 local cuando está disponible y consulta el perfil MDT05 IGN por WCS. No hay campos de asset, URL de Worker o combustible manual. El servidor escucha solo en `127.0.0.1`. `src/rc1-overlay.js` corta la línea geodésica por fronteras y `src/rc1-geometry.js` subdivide cada intervalo temático en tramos ≤30 m. Los 30 m son intervalo de integración, no precisión temática. En límites se conservan todos los recintos/candidatos.
 
-`src/rc1-fuel.js` aplica SIGPAC→dominio y MFE25→candidatos solo en FO/PR/MT/PA. PS aporta pastos=3; PR/MT matorral=6; PA pastos=3; FO no tiene V0 directo. P1/Q1/M1/PI1 usan campos MFE reales. Candidatos múltiples: max(V0) para cálculo con etiqueta ambigua. Evidencia positiva de combustible sin clase puede usar V0=8 con etiqueta no tipificada. NoData o fallo no se convierten a V0=8. AG/CA/ED/ZU inequívocos son discontinuidades con t_gap=0 provisional; IM/EP/ZC/ZV no lo son. Un combustible manual explícito cubre solo tramos sin clase. Matorral=6 se conserva provisionalmente pese a la discrepancia histórica 2–5 frente a 6 m/min.
+`src/rc1-fuel.js` aplica SIGPAC→dominio y MFE25→candidatos solo en FO/PR/MT/PA. PS aporta pastos=3; PR/MT matorral=6; PA pastos=3. P1/Q1/M1/PI1 usan campos MFE reales. Candidatos múltiples: max(V0) para cálculo con etiqueta ambigua. FO sin clase MFE25 concluyente y cultivos permanentes OV/VI/FY/FS/CI usan provisionalmente V0=8, como combustible positivo no tipificado. NoData o fallo no se convierten a V0=8. TA/TH y usos no clasificados quedan indeterminados. AG/CA/ED/ZU inequívocos son discontinuidades con t_gap=0 provisional; IM/EP/ZC/ZV no lo son. El selector manual de combustible no está en la interfaz RC1. [Política y preguntas para José Antonio](RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
 
-`infra/worker.js` añade `POST /perfil`: valida ≤256 puntos y ≤5 km, divide el corredor en ventanas WCS aproximadamente kilométricas y muestrea MDT05 IGN en ArcGrid. El parser admite cabeceras `dx/dy` observadas en la respuesta real. NoData conserva null. El cliente reintenta de forma acotada y puede usar Open-Meteo Elevation/GLO-90 únicamente como fallback visible. El Worker nuevo **no se ha desplegado**.
+`scripts/serve_rc1_local.py` expone `GET /api/rc1/asset` y `POST /api/rc1/perfil` en la misma URL local. Valida coordenadas, ≤5 km y ≤256 puntos; muestrea MDT05 IGN en ventanas WCS y conserva NoData. El cliente reintenta de forma acotada y puede usar Open-Meteo Elevation/GLO-90 como fallback visible. `infra/worker.js` conserva una implementación equivalente para un despliegue posterior, aún **no desplegado**. El servidor local requiere Python con GDAL; MFE25 se lee de la ruta local configurada, sin publicar el fichero.
 
 `src/rc1-providers.js` obtiene Open-Meteo `wind_speed_10m` y `wind_direction_10m` por hora UTC y hasta siete puntos del corredor; cada escenario t0,+1,+2,+3 h usa una única banda FV, la máxima espacial de esa hora. No se mezclan horas ni se crea viento cada 30 m. El viento es modelizado a 10 m, no observación local ni viento a media llama.
 
@@ -259,7 +259,7 @@ Pendiente antes de presentar la herramienta como lista para distribución:
 
 El piloto interno `audit_output/rc1_fuel_pilot_internal.json` está fuera del repositorio: bbox de aproximadamente 0,27×0,28 km en Badajoz, 17 recintos SIGPAC, 4 polígonos MFE25, 21.070 bytes. `scripts/build_rc1_pilot.py` documenta su derivación con hashes. No hay PMTiles regional ni cobertura de España completa. Antes de distribución se requiere pipeline de recintos completos, teselado con topología validada, medición y confirmación de licencia MFE25. SIGPAC indica CC BY 4.0; el aviso general de reutilización de MITECO no sustituye la comprobación de condiciones específicas del dataset/derivado.
 
-La validación interna ejecutó `npm test` (30/30), un corredor real de 25,98 m con SIGPAC PR + MFE Quercus, MDT05 y Open-Meteo (ETA t0 2,8869 min) y smoke tests aislados de proveedores. Esto verifica aritmética e integración de un piloto, **no** exactitud predictiva ni seguridad operativa. La demo global publicada conserva el cálculo antiguo; no se ha hecho push ni despliegue.
+La validación interna ejecutó `npm test` (31/31), un corredor real de 25,98 m con SIGPAC PR + MFE Quercus, MDT05 y Open-Meteo (ETA t0 2,8869 min), y otro de 77,95 m hasta viñedo con V0=8 provisional (ETA t0 9,7237 min). La misma secuencia se comprobó en navegador: editor de coordenadas, cálculo, cuadrantes, protocolos y panel automático. Esto verifica aritmética e integración local, **no** exactitud predictiva ni seguridad operativa. GitHub Pages conserva el cálculo antiguo; no se ha hecho push ni despliegue.
 
 ---
 

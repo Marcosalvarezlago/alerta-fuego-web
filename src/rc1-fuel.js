@@ -3,6 +3,7 @@
 export const V0_RC1 = Object.freeze({ pastos: 3, quercus: 4, matorral: 6, pinar: 8 });
 const GAP = new Set(['AG', 'CA', 'ED', 'ZU']);
 const MFE_DOMAINS = new Set(['FO', 'MT', 'PR', 'PA']);
+const UNTYPED_POSITIVE = new Set(['FO', 'OV', 'VI', 'FY', 'FS', 'CI']);
 const NATURAL = new Set(['Bosque Adehesado', 'Bosque', 'Bosque de Plantación',
   'Herbazal-Pastizal', 'Arbustedos', 'Pastizal-Matorral', 'Matorral con arbolado disperso',
   'Herbazal-Pastizal con dehesa hueca', 'Galerías arbustivas', 'Prados']);
@@ -70,6 +71,11 @@ export function resolverCombustible({ sigpac, mfe = [], combustiblePositivo = fa
   }
   const unique = [...new Map(candidates.map(c => [`${c.categoria}:${c.source}:${c.feature_id}`, c])).values()];
   const categorias = [...new Set(unique.map(c => c.categoria))].sort();
+  if (combustiblePositivo && codes.some(c => c !== 'FO' && UNTYPED_POSITIVE.has(c)) && categorias.length) {
+    return { ...base, status: 'untyped', candidates: unique,
+      label: 'mezcla con combustible no tipificado · valor conservador', v0: 8,
+      conflict: true, fallback: 'untyped_v0_8', rule: 'mixed_positive_fuel_max_v0_v1', confidence: 'baja' };
+  }
   if (categorias.length) return { ...base, status: 'classified', candidates: unique,
     label: categorias.length > 1 ? `clasificación ambigua: ${categorias.join(' / ')}` : categorias[0],
     v0: Math.max(...unique.map(c => c.v0)), conflict: base.conflict || categorias.length > 1,

@@ -284,9 +284,11 @@
         </div>
 
         <div class="seccion-datos">
-          <div class="cab-seccion"><span>Combustible</span></div>
-          <div id="comb-auto" class="auto-card">Se identificará automáticamente a lo largo del corredor al calcular. Fuentes: SIGPAC y MFE25 local si está disponible. Las dudas quedarán señaladas en cada tramo.</div>
-          <div class="grid-datos" hidden>
+          <div class="cab-seccion"><span>Combustible</span>
+            <label class="sw"><input type="checkbox" id="chk-comb-auto"> Automático</label>
+          </div>
+          <div id="comb-auto" class="auto-card">Se identificará automáticamente a lo largo del corredor al calcular. Fuente: SIGPAC; MFE25 local cuando esté disponible. Las dudas quedarán señaladas en cada tramo.</div>
+          <div id="comb-manual" class="grid-datos" hidden>
             <div class="campo">
               <label for="in-comb">Tipo dominante entre incendio y zona</label>
               <select id="in-comb">
@@ -296,6 +298,7 @@
                 <option value="matorral_mediterraneo">Matorral mediterráneo</option>
                 <option value="pinar">Pinar</option>
               </select>
+              <div class="mini-nota">Se aplica de forma uniforme al corredor. La pendiente y el viento pueden seguir automáticos.</div>
               <button class="btn mini" id="btn-sigpac" type="button" hidden>Consultar uso del terreno (SIGPAC)</button>
             </div>
           </div>
@@ -313,19 +316,14 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script>
-// =====================================================================
-// CONFIGURACIÓN OPCIONAL — servicio resolvedor de enlaces cortos
-// Pega entre las comillas la URL de tu Cloudflare Worker para que
-// funcionen los enlaces cortos de Google Maps (maps.app.goo.gl).
-// Ejemplo: window.CONFIG_RESOLVER = "https://alerta-fuego-enlaces.tuusuario.workers.dev";
-// Si se deja vacío, la app funciona igual pero pedirá la URL completa.
-// =====================================================================
+// Servicio público de datos y resolución de enlaces, configurado en la web.
 window.CONFIG_RESOLVER = "https://alerta-fuego-enlaces.marcosalvarez1w.workers.dev";
+window.CONFIG_RC1_API = "https://alerta-fuego-enlaces.marcosalvarez1w.workers.dev";
 </script>
 <script type="module">
 import * as Core from "./src/core.js";
-import { ejecutarRc1Automatico } from "./src/rc1-run.js?v=integrada-2";
-import { pintarResultadoRc1 } from "./src/rc1-view.js?v=integrada-3";
+import { ejecutarRc1Automatico } from "./src/rc1-run.js?v=rc1-public-2";
+import { pintarResultadoRc1 } from "./src/rc1-view.js?v=rc1-public-2";
 
 "use strict";
 // Modelo, geometría, conversiones y parser: fuente única comprobable en src/core.js.
@@ -443,9 +441,7 @@ const USO_SIGPAC_NOMBRE = {
   ED: "Edificación", CA: "Vial", AG: "Aguas", IM: "Improductivo", ZU: "Zona urbana"
 };
 
-// SIGPAC solo SUGIERE: el combustible operativo lo confirma el usuario.
-// Equivalencias operativas confirmadas por José Antonio (velocidad base m/min):
-// PS=3, PR/MT=6, PA=3 y FO=8. TA queda sin asociación automática.
+// Correspondencias históricas usadas solo por la tarjeta de sugerencia puntual.
 const SUGERENCIA_COMBUSTIBLE = Core.SUGERENCIA_COMBUSTIBLE_SIGPAC;
 
 const NOMBRE_CUADRANTE = {
@@ -482,6 +478,7 @@ const estado = {
   resultado: null,
   vientoAuto: { activo: true, cargando: false, datos: null, error: null, caducado: false },
   penAuto: { activo: true, cargando: false, datos: null, error: null },
+  combAuto: true,
   rc1Cargando: false,
   editor: null,
   // Marca si el usuario ha tocado los sliders manuales (sin valor operativo hasta entonces)
@@ -662,7 +659,7 @@ function renderSigpac() {
   }
   if (sg.error) {
     card.innerHTML = "<span class='err'>" + sg.error + "</span>" +
-      "<div class='mini-nota'>La consulta es solo orientativa: el combustible se elige manualmente igual.</div>" +
+      "<div class='mini-nota'>La consulta puntual es orientativa. Puedes usar el modo manual de combustible.</div>" +
       "<button class='btn mini' id='btn-sigpac-retry' type='button'>Reintentar</button>";
     document.getElementById("btn-sigpac-retry").addEventListener("click", consultarSigpac);
     return;
@@ -683,7 +680,7 @@ function renderSigpac() {
 
   if (!sug) {
     card.innerHTML = "Uso del suelo: <b>" + nombreSeguro + " (" + usoSeguro + ")</b>. " +
-      "Sin equivalencia directa con los combustibles del modelo: elige manualmente." + atribucion;
+      "Sin equivalencia directa en esta consulta puntual. El cálculo por tramos usa los recintos del corredor." + atribucion;
     return;
   }
 
@@ -831,6 +828,11 @@ function renderPendienteAuto() {
   }
 }
 
+function renderCombustible() {
+  document.getElementById("comb-auto").hidden = !estado.combAuto;
+  document.getElementById("comb-manual").hidden = estado.combAuto;
+}
+
 // === MAPA ===
 
 const map = L.map("map").setView(CENTRO_TRABAJO, 13);
@@ -917,7 +919,7 @@ function invalidarResultado() {
   document.getElementById("resultado").classList.remove("abierto");
   document.getElementById("resumen").style.display = "none";
   document.getElementById("comb-auto").textContent =
-    "Se identificará automáticamente a lo largo del corredor al calcular. Fuentes: SIGPAC y MFE25 local si está disponible. Las dudas quedarán señaladas en cada tramo.";
+    "Se identificará automáticamente a lo largo del corredor al calcular. Fuente: SIGPAC; MFE25 local cuando esté disponible. Las dudas quedarán señaladas en cada tramo.";
 }
 
 let temporizadorCaducidadViento = null;
@@ -1036,7 +1038,12 @@ async function calcular() {
   const controller = new AbortController();
   rc1Control = controller;
   estado.rc1Cargando = true;
-  document.getElementById("comb-auto").textContent = "Identificando usos y combustibles a lo largo del corredor…";
+  document.getElementById("comb-auto").textContent = estado.combAuto ?
+    "Identificando usos y combustibles a lo largo del corredor…" : "Combustible manual uniforme seleccionado.";
+  const slowTimer = setTimeout(() => {
+    if (rc1Control === controller && estado.combAuto) document.getElementById("comb-auto").textContent =
+      "SIGPAC está tardando en responder. Puedes esperar o cambiar a combustible manual.";
+  }, 4000);
   refrescar();
   try {
     const pendienteManual = estado.penAuto.activo ? null :
@@ -1047,9 +1054,15 @@ async function calcular() {
       haciaGrados: Core.resolverDireccionGrados(document.getElementById("in-dir").value),
       velocidadKmh: +document.getElementById("in-vel").value
     };
+    const combustibles = { pastos_bajos: "pastos", quercus: "quercus",
+      matorral_mediterraneo: "matorral", pinar: "pinar" };
+    const combustibleManual = estado.combAuto ? null :
+      combustibles[document.getElementById("in-comb").value];
     const r = await ejecutarRc1Automatico(estado.fuego, estado.zona, {
-      apiBase: window.location.origin, signal: controller.signal,
-      pendienteManual, vientoManual
+      apiBase: ["127.0.0.1", "localhost"].includes(window.location.hostname) ?
+        window.location.origin : window.CONFIG_RC1_API,
+      signal: controller.signal,
+      pendienteManual, vientoManual, combustibleManual
     });
     if (rc1Control !== controller || controller.signal.aborted) return;
     estado.resultado = r;
@@ -1062,7 +1075,7 @@ async function calcular() {
     document.getElementById("inputs").classList.remove("abierto");
     document.getElementById("btn-datos").textContent = "Datos ▾";
     document.getElementById("resultado").classList.add("abierto");
-    document.getElementById("comb-auto").textContent =
+    if (estado.combAuto) document.getElementById("comb-auto").textContent =
       `${r.scenarios[0].rows.length} tramos identificados. Abre los detalles técnicos para ver fuentes, reglas y dudas.`;
   } catch (error) {
     if (controller.signal.aborted) return;
@@ -1072,8 +1085,10 @@ async function calcular() {
       Core.escaparHtml(error.message || String(error)) +
       '</div></div><div class="recordatorio">Ante peligro inmediato, llama al <strong>112</strong>.</div>';
     document.getElementById("resultado").classList.add("abierto");
-    document.getElementById("comb-auto").textContent = "La identificación del terreno no está disponible. Reintenta el cálculo.";
+    if (estado.combAuto) document.getElementById("comb-auto").textContent =
+      "La identificación del terreno no está disponible. Reintenta o cambia a combustible manual.";
   } finally {
+    clearTimeout(slowTimer);
     if (rc1Control === controller) {
       rc1Control = null;
       estado.rc1Cargando = false;
@@ -1299,6 +1314,10 @@ function motivosBloqueo() {
     if (!estado.penElegida || !sentidoElegido) motivos.push("elige la pendiente y el sentido de la ladera");
   }
 
+  if (!estado.combAuto && document.getElementById("in-comb").value === "") {
+    motivos.push("elige el combustible manual");
+  }
+
   return motivos;
 }
 
@@ -1328,7 +1347,7 @@ function refrescar() {
   if (motivos.length > 0) {
     hintCalc.textContent = "Para calcular: " + motivos.join(" · ") + ".";
   } else if (estado.resultado === null) {
-    hintCalc.textContent = "Todo listo. SIGPAC, MFE25, perfil y viento se consultan automáticamente al calcular.";
+    hintCalc.textContent = "Todo listo. Pulsa Calcular alerta; se usarán los modos automáticos o manuales que figuran en Datos.";
   } else {
     hintCalc.textContent = "";
   }
@@ -1409,6 +1428,11 @@ document.getElementById("chk-pen-auto").addEventListener("change", function (e) 
   invalidarResultado();
   renderPendienteAuto(); refrescar();
 });
+document.getElementById("chk-comb-auto").addEventListener("change", function (e) {
+  estado.combAuto = e.target.checked;
+  invalidarResultado();
+  renderCombustible(); refrescar();
+});
 
 function marcarVelElegida() {
   if (estado.velElegida) return;
@@ -1445,9 +1469,11 @@ document.getElementById("in-pen").addEventListener("input", function (e) {
 
 renderVientoAuto();
 renderPendienteAuto();
+renderCombustible();
 renderSigpac();
 document.getElementById("chk-viento-auto").checked = true;
 document.getElementById("chk-pen-auto").checked = true;
+document.getElementById("chk-comb-auto").checked = true;
 refrescar();
 </script>
 </body>

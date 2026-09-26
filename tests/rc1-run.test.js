@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ejecutarRc1 } from '../src/rc1-run.js';
+import { ejecutarRc1, ejecutarRc1Automatico } from '../src/rc1-run.js';
 import { calcularDistanciaM } from '../src/core.js';
 
 const inicio = { lat: 0, lon: 0 };
@@ -62,4 +62,45 @@ test('cultivo permanente y FO sin MFE usan V0 prudente; tierra arable queda inde
     assert.equal(result.scenarios[0].eta_min === null, expectedV0 === null, uso);
     if (expectedV0) assert.equal(result.scenarios[0].rows[0].fallback, 'untyped_v0_8');
   }
+});
+
+test('combustible manual uniforme omite SIGPAC y permite perfil y viento automáticos', async () => {
+  const calls = [];
+  const fetcher = async (url) => {
+    calls.push(String(url));
+    if (String(url).endsWith('/perfil')) return { ok: true,
+      json: async () => ({ elevaciones: [100, 100, 100] }) };
+    if (String(url).includes('/v1/forecast')) return mockFetch(url);
+    throw new Error(`consulta inesperada: ${url}`);
+  };
+  const result = await ejecutarRc1Automatico(inicio, fin, { apiBase: 'https://local.test',
+    combustibleManual: 'pinar', fetcher, now });
+  assert.ok(result.scenarios[0].rows.every(row => row.v0 === 8 && row.status === 'manual'));
+  assert.ok(result.scenarios[0].eta_min > 0);
+  assert.ok(calls.every(url => !url.includes('/asset')));
+  assert.equal(result.source_versions.fuel_source, 'combustible manual homogéneo');
+});
+
+test('la versión pública completa usos SIGPAC por lotes antes de clasificar', async () => {
+  const remote = structuredClone(asset);
+  remote.lookup_required = true;
+  remote.sigpac[0].properties = { feature_id: 1, ref: [6, 128, 0, 0, 18, 5008, 10],
+    uso: null, lookup_status: 'pending' };
+  const calls = [];
+  const fetcher = async (url) => {
+    calls.push(String(url));
+    if (String(url).includes('/asset?')) return { ok: true, json: async () => remote };
+    if (String(url).endsWith('/usos')) return { ok: true, json: async () => ({ parcels: [
+      { key: [6, 128, 0, 0, 18, 5008], uses: [{ recinto: 10, uso: 'PR' }] }
+    ] }) };
+    if (String(url).endsWith('/perfil')) return { ok: true,
+      json: async () => ({ elevaciones: [100, 100, 100] }) };
+    if (String(url).includes('/v1/forecast')) return mockFetch(url);
+    throw new Error(`consulta inesperada: ${url}`);
+  };
+  const result = await ejecutarRc1Automatico(inicio, fin,
+    { apiBase: 'https://local.test', fetcher, now });
+  assert.equal(result.scenarios[0].rows[0].v0, 6);
+  assert.ok(result.scenarios[0].eta_min > 0);
+  assert.equal(calls.filter(url => url.endsWith('/usos')).length, 1);
 });

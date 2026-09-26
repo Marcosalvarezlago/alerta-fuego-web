@@ -6,6 +6,59 @@ import { agregarVientoHorario, horasEscenario } from './rc1-engine.js';
 const COMBUSTIBLE_CULTIVO = new Set(['OV', 'VI', 'FY', 'FS', 'CI']);
 const DOMINIO_COMBUSTIBLE = new Set(['FO', 'MT', 'PR', 'PA', 'PS', ...COMBUSTIBLE_CULTIVO]);
 
+async function completarUsosPublicos(asset, apiBase, fetcher, signal) {
+  if (!asset.lookup_required) return asset;
+  const groups = new Map();
+  for (const feature of asset.sigpac) {
+    const ref = feature.properties?.ref;
+    if (!Array.isArray(ref) || ref.length !== 7) continue;
+    const key = JSON.stringify(ref.slice(0, 6));
+    if (!groups.has(key)) groups.set(key, { key: ref.slice(0, 6), recintos: new Set() });
+    groups.get(key).recintos.add(ref[6]);
+  }
+  const parcels = [...groups.values()].map(p => ({ key: p.key, recintos: [...p.recintos] }));
+  const batches = [];
+  for (let i = 0; i < parcels.length; i += 20) batches.push(parcels.slice(i, i + 20));
+  const ctrl = new AbortController();
+  const abort = () => ctrl.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  const timer = setTimeout(() => ctrl.abort(), 25000);
+  let results;
+  try {
+    results = await Promise.all(batches.map(async batch => {
+      const response = await fetcher(`${apiBase}/api/rc1/usos`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parcels: batch }), signal: ctrl.signal
+      });
+      if (!response.ok) throw new Error(`SIGPAC no pudo completar los usos (HTTP ${response.status})`);
+      const data = await response.json();
+      if (!Array.isArray(data.parcels)) throw new Error('SIGPAC devolvió usos incompletos');
+      return data.parcels;
+    }));
+  } catch (error) {
+    if (ctrl.signal.aborted && !signal?.aborted) {
+      throw new Error('SIGPAC tarda demasiado. Reintenta o usa combustible manual.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
+  }
+  const uses = new Map();
+  for (const parcel of results.flat()) {
+    for (const entry of parcel.uses ?? []) {
+      uses.set(JSON.stringify([...parcel.key, entry.recinto]), entry.uso);
+    }
+  }
+  for (const feature of asset.sigpac) {
+    const code = uses.get(JSON.stringify(feature.properties.ref));
+    feature.properties.uso = typeof code === 'string' && /^[A-Z]{2}$/.test(code) ? code : null;
+    feature.properties.lookup_status = feature.properties.uso ? 'matched' : 'unmatched';
+  }
+  asset.manifest.sigpac_parcel_count = parcels.length;
+  return asset;
+}
+
 function evidenciaCombustibleMfe(features) {
   return features.some(f => {
     const p = f.properties ?? {};
@@ -69,17 +122,46 @@ export async function ejecutarRc1(inicio, fin, asset, {
 
 export async function ejecutarRc1Automatico(inicio, fin, {
   apiBase = '', signal, fetcher = fetch, now = new Date(),
-  pendienteManual = null, vientoManual = null
+  pendienteManual = null, vientoManual = null, combustibleManual = null
 } = {}) {
-  const params = new URLSearchParams({ lat0: inicio.lat, lon0: inicio.lon,
-    lat1: fin.lat, lon1: fin.lon });
-  const response = await fetcher(`${apiBase}/api/rc1/asset?${params}`, { signal });
-  if (!response.ok) {
-    const detail = await response.json().catch(() => ({}));
-    throw new Error(detail.error || `No se pudo identificar el terreno (HTTP ${response.status})`);
+  let asset;
+  if (combustibleManual !== null) {
+    if (!['pastos', 'quercus', 'matorral', 'pinar'].includes(combustibleManual)) {
+      throw new RangeError('Combustible manual no válido');
+    }
+    const pad = 0.000001;
+    asset = { asset_id: 'manual-uniforme',
+      bbox: [Math.min(inicio.lon, fin.lon) - pad, Math.min(inicio.lat, fin.lat) - pad,
+        Math.max(inicio.lon, fin.lon) + pad, Math.max(inicio.lat, fin.lat) + pad],
+      sigpac: [], mfe: [], manifest: { fuel_source: 'combustible manual homogéneo',
+        ruleset: 'vpif-rc1-provisional-1', mfe_count: 0, sigpac_count: 0 } };
+  } else {
+    const params = new URLSearchParams({ lat0: inicio.lat, lon0: inicio.lon,
+      lat1: fin.lat, lon1: fin.lon });
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    const timer = setTimeout(() => controller.abort(), 25000);
+    try {
+      const response = await fetcher(`${apiBase}/api/rc1/asset?${params}`, { signal: controller.signal });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.error || `No se pudo identificar el terreno (HTTP ${response.status})`);
+      }
+      asset = await response.json();
+    } catch (error) {
+      if (controller.signal.aborted && !signal?.aborted) {
+        throw new Error('SIGPAC tarda demasiado. Reintenta o usa combustible manual.');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+    }
   }
-  const asset = await response.json();
+  await completarUsosPublicos(asset, apiBase, fetcher, signal);
   return ejecutarRc1(inicio, fin, asset, { workerUrl: `${apiBase}/api/rc1`,
     permitirFallbackOpenMeteo: true, pendienteManual, vientoManual,
+    manual: combustibleManual,
     signal, fetcher, now });
 }

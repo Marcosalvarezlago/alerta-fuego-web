@@ -1,6 +1,6 @@
 # Alerta Fuego — Guía para el equipo fundador
 
-*La RC1 por tramos está integrada en la interfaz local de `index.html`. GitHub Pages conserva por ahora la demo global histórica. Ninguna está validada como herramienta fiable de emergencia. Los apartados anteriores a “RC1 por tramos” describen la versión histórica publicada.*
+*La RC1 por tramos es la interfaz actual de `index.html`, en local y en la web pública. Sigue siendo una demo experimental, sin validación como herramienta fiable de emergencia. Los apartados anteriores a “RC1 por tramos” describen la versión global histórica.*
 
 ---
 
@@ -137,13 +137,13 @@ La pregunta de esta fase no es solo «¿funciona la pantalla?», sino también:
 
 ---
 
-## RC1 por tramos: piloto local provisional
+## RC1 por tramos: demo provisional
 
-La web local conserva mapa, marcadores, editor de coordenadas, geolocalización, cuadrantes y protocolos de la versión anterior. Al pulsar “Calcular alerta”, `index.html` recorre un corredor 1D, corta sus fronteras SIGPAC/MFE25, integra segmentos de hasta 30 m, usa pendiente firmada de perfil y cuatro escenarios horarios de viento. Cada tramo aporta su tiempo a la ETA. Los 30 m son separación de integración, no precisión del mapa de combustible.
+La web conserva mapa, marcadores, editor de coordenadas, geolocalización, cuadrantes y protocolos de la versión anterior. Al pulsar “Calcular alerta”, `index.html` recorre un corredor 1D, corta sus fronteras SIGPAC y MFE25 cuando está disponible, integra segmentos de hasta 30 m, usa pendiente firmada de perfil y cuatro escenarios horarios de viento. Cada tramo aporta su tiempo a la ETA. Los 30 m son separación de integración, no precisión del mapa de combustible.
 
-La prueba local obtiene SIGPAC y el perfil IGN automáticamente; el MFE25 actualmente disponible en el equipo cubre Extremadura. Nadie tiene que elegir un fichero, escribir la URL de un Worker ni seleccionar combustible. Un FO sin clase MFE no se convierte en pinar: recibe provisionalmente V0=8 con etiqueta de “combustible no tipificado”. Viñedo, olivar y otros cultivos permanentes reciben la misma hipótesis prudente. Sin evidencia suficiente, la ETA queda indeterminada. Las discontinuidades inequívocas se registran con tiempo cero como convención de cálculo: **no significa que el fuego atraviese una barrera instantáneamente**. Puede usarse Open-Meteo Elevation como respaldo visible si el MDT05 no responde. [Reglas y preguntas para José Antonio](RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
+El combustible automático usa SIGPAC; en local puede añadir MFE25 si está instalado, mientras que la web pública no lo distribuye. No hay que elegir un fichero ni escribir la URL de un Worker. También pueden elegirse por separado pendiente, viento y combustible manuales. Un FO sin clase MFE no se convierte en pinar: recibe provisionalmente V0=8 con etiqueta de “combustible no tipificado”. Viñedo, olivar y otros cultivos permanentes reciben la misma hipótesis prudente. Sin evidencia suficiente, la ETA queda indeterminada. Las discontinuidades inequívocas se registran con tiempo cero como convención de cálculo: **no significa que el fuego atraviese una barrera instantáneamente**. Puede usarse Open-Meteo Elevation como respaldo visible si el MDT05 no responde. [Reglas provisionales](RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
 
-Dirección decidió implementar RC1 antes de la revisión con José Antonio. Quedan para su criterio: max(V0) en mezclas, V0=8 para combustible positivo no tipificado, t_gap=0, viento espacial prudencial, presentación de ETA por sector y discrepancia histórica del matorral 2–5 frente a 6 m/min. La RC1 no está desplegada ni validada científicamente; ninguna ETA debe interpretarse como tiempo seguro.
+Siguen pendientes de revisión técnica max(V0) en mezclas, V0=8 para combustible positivo no tipificado, t_gap=0, viento espacial prudencial, presentación de ETA por sector y la discrepancia histórica del matorral 2–5 frente a 6 m/min. Ninguna ETA debe interpretarse como tiempo seguro.
 
 ---
 

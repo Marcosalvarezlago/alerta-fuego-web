@@ -29,7 +29,16 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, NOMBRE_CUADRANTE,
   const acciones = protocolo.acciones.map(a => `<li>${esc(a)}</li>`).join('');
   const sinDato = t0.rows.filter(row => Object.values(row.nodata_flags || {}).some(Boolean)).length;
   const fallback = t0.rows.filter(row => row.fallback === 'untyped_v0_8').length;
-  const fuenteMfe = r.source_versions.mfe_count > 0 ? 'MFE25 local' : 'MFE25 sin cobertura local';
+  const combustibleManual = r.source_versions.fuel_source === 'combustible manual homogéneo';
+  const fuenteCombustible = combustibleManual ? 'combustible manual homogéneo' :
+    `SIGPAC FEGA · ${r.source_versions.mfe_count > 0 ? 'MFE25 local' : 'MFE25 no disponible en esta ejecución'}`;
+  const fuentes = [];
+  if (!combustibleManual) fuentes.push('<a href="https://sigpac-hubcloud.es/" target="_blank" rel="noopener noreferrer">SIGPAC/FEGA</a>');
+  if (r.source_versions.mfe_count > 0) fuentes.push('<a href="https://www.miteco.gob.es/" target="_blank" rel="noopener noreferrer">MITECO</a>');
+  if (r.profile_source?.startsWith('IGN')) fuentes.push('<a href="https://www.ign.es/" target="_blank" rel="noopener noreferrer">IGN</a>');
+  if (r.profile_source?.startsWith('Open-Meteo') || r.source_versions.wind_source?.startsWith('Open-Meteo')) {
+    fuentes.push('<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>');
+  }
   const detalle = sinDato ? `${sinDato} tramos sin datos suficientes. La ETA queda indeterminada.` :
     fallback ? `${fallback} tramos usan V0 = 8 provisional por combustible positivo no tipificado.` :
       'Todos los tramos tienen combustible identificado.';
@@ -43,17 +52,14 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, NOMBRE_CUADRANTE,
       'Estimación orientativa por tramos.'}</div></div>` +
     `<div class="metrica"><div class="l">Tramos</div><div class="v">${t0.rows.length}</div>` +
     `<div class="s">VPIF y pendiente calculadas en cada tramo.</div></div></div>` +
-    `<div class="datos-usados"><b>Datos usados:</b> SIGPAC FEGA · ${fuenteMfe} · ` +
+    `<div class="datos-usados"><b>Datos usados:</b> ${fuenteCombustible} · ` +
     `${esc(r.profile_source)} · ${esc(r.source_versions.wind_source)}. ${detalle}` +
-    `<div class="mini-nota">Fuentes: <a href="https://sigpac-hubcloud.es/" target="_blank" rel="noopener noreferrer">SIGPAC/FEGA</a>, ` +
-    `<a href="https://www.miteco.gob.es/" target="_blank" rel="noopener noreferrer">MITECO</a>, ` +
-    `<a href="https://www.ign.es/" target="_blank" rel="noopener noreferrer">IGN</a> y ` +
-    `<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>.</div></div>` +
+    (fuentes.length ? `<div class="mini-nota">Fuentes: ${fuentes.join(', ')}.</div>` : '') + '</div>' +
     `<div class="escenarios">${escenarios}</div>` +
     `<details class="bloque" open><summary>${protocolo.encabezado}: ${protocolo.titulo}</summary>` +
     `<ul>${acciones}</ul></details>` +
     `<details class="bloque"><summary>Detalles técnicos de los tramos</summary><div class="tec">` +
-    `Modelo ${esc(r.model_version)}. V0 provisional; por confirmar con José Antonio. ` +
+    `Modelo ${esc(r.model_version)}. Velocidades base y reglas experimentales. ` +
     `Sin combustible comprobable se deja la ETA indeterminada.` +
     `<div class="tramos-wrap"><table class="tramos"><thead><tr><th>#</th><th>Recorrido</th>` +
     `<th>Combustible y regla</th><th>V0</th><th>Pendiente</th><th>VPIF</th><th>Tiempo</th>` +

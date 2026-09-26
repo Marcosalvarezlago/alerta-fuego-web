@@ -30,7 +30,8 @@ export async function obtenerPerfil(puntos, { workerUrl, signal, fetcher = fetch
           throw new Error('perfil inválido');
         }
         return { elevations: response.elevaciones.map(x => Number.isFinite(x) ? x : null),
-          source: 'IGN MDT05 WCS, servicio local', fallback: null };
+          source: workerUrl.startsWith('http://127.0.0.1') || workerUrl.startsWith('http://localhost')
+            ? 'IGN MDT05 WCS, servidor local' : 'IGN MDT05 WCS, servicio web', fallback: null };
       } catch (error) {
         if (signal?.aborted) throw error;
         if (attempt === 1 && !permitirFallbackOpenMeteo) throw error;

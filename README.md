@@ -10,10 +10,10 @@ Demo web para estimar de forma orientativa el tiempo de llegada de un frente de 
 - Mapa Leaflet con OpenStreetMap y Esri World Imagery.
 - Viento modelizado mediante Open-Meteo.
 - Elevaciones mediante IGN, con reserva Open-Meteo.
-- Combustible automático por tramo mediante SIGPAC y MFE25 local disponible, con reglas provisionales trazables.
+- Combustible automático por tramo mediante SIGPAC y MFE25 cuando existe cobertura local, con reglas provisionales trazables. Pendiente, viento y combustible admiten modo manual.
 - Cloudflare Worker versionado en `infra/worker.js`.
 - Lógica pura y pruebas reproducibles con Node.
-- RC1 por tramos **integrada y probada localmente**; la versión publicada todavía no se ha actualizado ni validado científicamente.
+- RC1 por tramos integrada y comprobada con el servidor local y con la ruta pública del Worker. Sus hipótesis siguen siendo provisionales; no hay validación predictiva u operativa.
 - Validación operativa externa **no acreditada por el repositorio**.
 
 La demo publicada se encuentra en [GitHub Pages](https://marcosalvarezlago.github.io/alerta-fuego-web/). Su disponibilidad y la del Worker deben comprobarse por separado.
@@ -48,7 +48,8 @@ La demo publicada se encuentra en [GitHub Pages](https://marcosalvarezlago.githu
 - [Documentación técnica](docs/DOCUMENTACION_TECNICA.md): arquitectura, modelo implementado, fuentes, límites, privacidad, pruebas y despliegue.
 - [Guía para el equipo fundador](docs/GUIA_FUNDADORES.md): explicación no técnica y cuestiones pendientes de validación.
 - [ADR 0001](docs/adr/0001-demo-vpif-por-tramos.md): decisión de mantener VPIF e incorporar cálculo por tramos en la próxima demo.
-- [Política provisional de combustible](docs/RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md): supuestos automáticos y preguntas para José Antonio.
+- [Política provisional de combustible](docs/RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md): supuestos automáticos y cuestiones para revisión técnica.
+- [Mejora visual futura](docs/ROADMAP_VISUALIZACION_RC1.md): mapa de combustibles, perfil de pendiente y comparación de escenarios.
 - [Validación MVP](docs/VALIDACION_MVP.md): puertas mínimas antes de presentar la siguiente versión como demo pública coherente.
 
 ## Modelo actual implementado
@@ -58,11 +59,11 @@ VPIF = V0 · FV · FP
 tiempo = distancia / VPIF
 ```
 
-La copia local de `index.html` integra por tramos; GitHub Pages conserva por ahora la versión global anterior porque no se ha hecho push ni despliegue.
+La misma interfaz RC1 se sirve en local y en GitHub Pages. El cálculo público obtiene SIGPAC y el perfil de elevación por medio del Worker; la ejecución local puede complementar SIGPAC con MFE25 instalado en el equipo.
 
 ## RC1 provisional por tramos
 
-La RC1 mantiene el modelo de José Antonio y lo aplica **por tramos**:
+La RC1 mantiene el modelo VPIF del proyecto y lo aplica **por tramos**:
 
 ```text
 VPIF_i,s = V0_i · FV_s · FP_i
@@ -77,7 +78,7 @@ Decisiones de diseño ya adoptadas:
 - pendiente por tramos sobre el perfil foco → zona vulnerable;
 - cálculo acumulativo de tiempos parciales;
 - Rothermel queda fuera de este lanzamiento y pasa a I+D+i futura;
-- la implementación local se revisará técnicamente antes de pasar a José Antonio; sus decisiones científicas siguen provisionales.
+- las decisiones científicas de la implementación siguen siendo provisionales.
 
 El detalle y las cuestiones abiertas están en [ADR 0001](docs/adr/0001-demo-vpif-por-tramos.md).
 
@@ -92,11 +93,11 @@ La demo global histórica conserva estas correspondencias por ocupación; **no s
 | PA | 3 |
 | FO | 8 |
 
-En RC1, SIGPAC decide primero el dominio: PS→pastos; PR/MT→candidato matorral; PA→candidato pastos. MFE25 añade semántica en FO/PR/MT/PA. Los candidatos múltiples conservan su etiqueta ambigua y usan provisionalmente max(V0). Si hay evidencia positiva de combustible pero no clase fiable (FO sin MFE o cultivo permanente OV/VI/FY/FS/CI), se usa V0=8, marcado como hipótesis conservadora. TA/TH y cualquier ausencia de SIGPAC permanecen indeterminados. No hay selector manual de combustible en la web. [Reglas completas](docs/RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
+En RC1, SIGPAC decide primero el dominio: PS→pastos; PR/MT→candidato matorral; PA→candidato pastos. MFE25 añade semántica en FO/PR/MT/PA cuando está disponible. Los candidatos múltiples conservan su etiqueta ambigua y usan provisionalmente max(V0). Si hay evidencia positiva de combustible pero no clase fiable (FO sin MFE o cultivo permanente OV/VI/FY/FS/CI), se usa V0=8, marcado como hipótesis conservadora. TA/TH y cualquier ausencia de SIGPAC permanecen indeterminados en modo automático. El modo manual permite escoger un combustible uniforme para todo el corredor. [Reglas completas](docs/RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
 
 No debe inferirse precisión temática de 30 m por el hecho de muestrear una línea cada ~30 m.
 
-## Cuestiones pendientes de confirmación con José Antonio
+## Cuestiones pendientes de revisión técnica
 
 - El documento original describe el matorral aproximadamente como `2–5 m/min`, pero usa `V0 = 6 m/min`.
 - Confirmar si la dirección del viento afecta únicamente al escenario espacial o también a la velocidad de propagación.
@@ -107,8 +108,8 @@ No debe inferirse precisión temática de 30 m por el hecho de muestrear una lí
 Las funciones automáticas envían coordenadas o enlaces a servicios externos:
 
 - Open-Meteo para viento y, en reserva, elevación;
-- servidor local e IGN para perfil de elevación;
-- servidor local y SIGPAC para recintos y usos del suelo;
+- servidor local o Cloudflare Worker e IGN para perfil de elevación;
+- servidor local o Cloudflare Worker y SIGPAC para recintos y usos del suelo;
 - Cloudflare Worker y Google para enlaces cortos.
 
 No hay cuentas ni base de datos propia en esta demo, pero los proveedores pueden registrar solicitudes conforme a sus políticas. Antes de una difusión mayor deben mantenerse las atribuciones y condiciones de Open-Meteo/Copernicus, IGN/CNIG, SIGPAC/FEGA, OpenStreetMap y Esri.
@@ -121,13 +122,13 @@ Para probar la RC1, inicia el servidor local con el Python del entorno `alerta-g
 & 'C:\Users\marco\anaconda3\envs\alerta-gis\python.exe' .\scripts\serve_rc1_local.py 8765
 ```
 
-Abre [http://127.0.0.1:8765/index.html](http://127.0.0.1:8765/index.html). Fija incendio y zona vulnerable y pulsa **Calcular alerta**. El servidor obtiene los recintos SIGPAC y el perfil IGN; el navegador consulta el viento horario. No hay que cargar un asset, escribir una URL de Worker ni seleccionar combustible. Por defecto, el servidor busca el MFE25 local en `C:\Users\marco\Documents\Alerta Fuego\tmp-mfe-extremadura-audit\MFE_43.shp`; se puede cambiar con `ALERTA_MFE_SHP`. Sin esa fuente, solo se usan los códigos SIGPAC y se conserva NoData donde falte evidencia. La cobertura MFE25 disponible es Extremadura, no España completa.
+Abre [http://127.0.0.1:8765/index.html](http://127.0.0.1:8765/index.html). Fija incendio y zona vulnerable y pulsa **Calcular alerta**. El servidor obtiene los recintos SIGPAC y el perfil IGN; el navegador consulta el viento horario. No hay que cargar un asset ni escribir una URL de Worker. En **Datos** se puede desactivar por separado cada modo automático y usar pendiente, viento o combustible manuales. Por defecto, el servidor busca el MFE25 local en `C:\Users\marco\Documents\Alerta Fuego\tmp-mfe-extremadura-audit\MFE_43.shp`; se puede cambiar con `ALERTA_MFE_SHP`. Sin esa fuente, solo se usan los códigos SIGPAC y se conserva NoData donde falte evidencia. La cobertura MFE25 disponible es Extremadura, no España completa.
 
 El pipeline `scripts/build_rc1_pilot.py` usa GDAL ya disponible en el entorno `alerta-gis` y requiere un GeoJSON de recintos SIGPAC, MFE25 SHP y bbox explícito. No instala dependencias ni crea PMTiles. Para publicar un derivado regional faltan ingestión completa de recintos, generalización/topología, empaquetado PMTiles, medición de tamaño y revisión jurídica de condiciones MFE25. [SIGPAC publica recintos bajo CC BY 4.0](https://sigpac-hubcloud.es/html/sdsigpac/descServicio.html); la licencia específica MFE25 del derivado debe confirmarse antes de distribuirlo.
 
-No hay proceso de compilación. El servidor local es necesario para las rutas automáticas `/api/rc1/asset` y `/api/rc1/perfil`; un servidor HTTP estático o `file://` no ejecuta el cálculo completo.
+No hay proceso de compilación. El servidor local atiende `/api/rc1/asset` y `/api/rc1/perfil`; en GitHub Pages estas rutas las atiende el Worker. Abrir `file://` no es una forma compatible de ejecutar la aplicación.
 
-Las consultas automáticas requieren acceso a internet. El Worker configurado en `index.html` solo se conserva para resolver enlaces cortos de Google Maps; el cálculo RC1 local no exige introducir su URL.
+Las consultas automáticas requieren acceso a internet. El Worker ya está configurado en `index.html`; la persona usuaria no debe introducir su URL. La página pública no distribuye el fichero MFE25 local.
 
 Las pruebas unitarias no llaman a los proveedores reales:
 
@@ -139,8 +140,8 @@ npm test
 
 - La página estática se publica mediante GitHub Pages desde la configuración del repositorio.
 - El Worker se despliega por separado en Cloudflare.
-- Hasta automatizarlo, hay que registrar qué revisión de `infra/worker.js` está desplegada para evitar divergencias.
-- La siguiente versión no debe desplegarse sin superar las puertas de [VALIDACION_MVP.md](docs/VALIDACION_MVP.md) y autorización expresa de Dirección.
+- En cada publicación, comprobar por separado la web y las rutas públicas del Worker.
+- La consolidación científica u operativa de una versión posterior requiere las verificaciones de [VALIDACION_MVP.md](docs/VALIDACION_MVP.md).
 
 ## I+D+i posterior
 

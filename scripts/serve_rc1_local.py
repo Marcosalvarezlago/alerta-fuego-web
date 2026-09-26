@@ -10,12 +10,13 @@ import os
 import sys
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from osgeo import ogr
-from build_rc1_pilot import bbox_geometry, mfe_features, sigpac_with_use
+from build_rc1_pilot import mfe_features, reference
 
 ROOT = Path(__file__).resolve().parents[1]
 MFE_PATH = Path(os.environ.get('ALERTA_MFE_SHP',
@@ -23,6 +24,7 @@ MFE_PATH = Path(os.environ.get('ALERTA_MFE_SHP',
 SIGPAC_ITEMS = 'https://sigpac-hubcloud.es/ogcapi/collections/recintos/items'
 IGN_WCS = 'https://servicios.idee.es/wcs-inspire/mdt'
 ASSET_CACHE = {}
+PARCEL_CACHE = {}
 
 
 def get_json(url, timeout=20):
@@ -80,17 +82,41 @@ def sigpac_features(clip, bbox):
         url = urllib.parse.urljoin(url, next_url)
     else:
         raise ValueError('demasiados recintos SIGPAC para este corredor; acorta la distancia')
+    def parcel_key(feature):
+        return reference(feature['properties'])[:-1]
+
+    groups = {parcel_key(feature) for feature in relevant.values()}
+
+    def load_parcel(key):
+        if key in PARCEL_CACHE:
+            return key, PARCEL_CACHE[key]
+        url = ('https://sigpac-hubcloud.es/servicioconsultassigpac/query/'
+               'recinfoparc/' + '/'.join(map(str, key)) + '.json')
+        try:
+            records = get_json(url, timeout=12)
+            if not isinstance(records, list):
+                records = []
+        except Exception:
+            records = []
+        PARCEL_CACHE[key] = records
+        return key, records
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        parcel_records = dict(pool.map(load_parcel, groups))
     out = []
     for feature in relevant.values():
-        try:
-            out.append(sigpac_with_use(feature, clip))
-        except Exception:
-            geom = ogr.CreateGeometryFromJson(json.dumps(feature['geometry'])).Intersection(clip)
-            out.append({'type': 'Feature', 'id': feature.get('id'),
-                        'geometry': json.loads(geom.ExportToJson()),
-                        'properties': {'feature_id': feature.get('id'), 'uso': None,
-                                       'source': 'SIGPAC FEGA OGC', 'lookup_status': 'failed'}})
-    return out
+        geom = ogr.CreateGeometryFromJson(json.dumps(feature['geometry'])).Intersection(clip)
+        if geom is None or geom.IsEmpty():
+            continue
+        matches = [record for record in parcel_records[parcel_key(feature)]
+                   if reference(record) == reference(feature['properties'])]
+        code = matches[0].get('uso_sigpac') if len(matches) == 1 else None
+        out.append({'type': 'Feature', 'id': feature.get('id'),
+                    'geometry': json.loads(geom.ExportToJson()),
+                    'properties': {'feature_id': feature.get('id'), 'uso': code,
+                                   'source': 'SIGPAC FEGA OGC + consulta parcela',
+                                   'lookup_status': 'matched' if code else 'unmatched'}})
+    return out, len(groups)
 
 
 def asset(a, b):
@@ -98,7 +124,7 @@ def asset(a, b):
     if key in ASSET_CACHE:
         return ASSET_CACHE[key]
     clip, bbox = corredor(a, b)
-    sigpac = sigpac_features(clip, bbox)
+    sigpac, parcel_count = sigpac_features(clip, bbox)
     mfe = []
     if MFE_PATH.is_file():
         for feature in mfe_features(MFE_PATH, bbox):
@@ -117,7 +143,8 @@ def asset(a, b):
                            'mfe_source': str(MFE_PATH) if MFE_PATH.is_file() else 'no disponible',
                            'mfe_license': 'uso interno; redistribución pendiente de revisión',
                            'ruleset': 'vpif-rc1-provisional-1',
-                           'sigpac_count': len(sigpac), 'mfe_count': len(mfe)}}
+                           'sigpac_count': len(sigpac), 'sigpac_parcel_count': parcel_count,
+                           'mfe_count': len(mfe)}}
     if len(ASSET_CACHE) >= 16:
         ASSET_CACHE.pop(next(iter(ASSET_CACHE)))
     ASSET_CACHE[key] = result

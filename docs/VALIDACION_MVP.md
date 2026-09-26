@@ -1,12 +1,12 @@
 # Validación de la próxima demo MVP
 
-**Estado 2026-09-26:** RC1 local provisional en validación técnica. No acredita validación externa ni autoriza despliegue.
+**Estado 2026-09-26:** RC1 provisional preparada como demo pública experimental. Su publicación no acredita validación científica u operativa.
 
 Este documento define las puertas mínimas antes de presentar la siguiente versión de Alerta Fuego como demo pública coherente. No sustituye pruebas científicas ni operativas.
 
 ## 1. Especificación provisional RC1 y gate v1.0
 
-Dirección autorizó implementar RC1 antes de la revisión experta. Antes de consolidar v1.0 o publicar:
+Dirección autorizó implementar y compartir la RC1 experimental antes de la revisión experta. Antes de consolidar v1.0:
 
 - [x] Documentar especificación candidata `VPIF` por tramos del preflight.
 - [x] Dejar explícitamente abiertas las reglas provisionales de combustible por tramo.
@@ -69,7 +69,7 @@ Tras implementación:
 
 ## 8. Criterio de salida
 
-La versión solo pasa a **demo pública** cuando:
+La versión solo pasa a **versión validada para uso operativo** cuando:
 
 1. José Antonio haya revisado la RC1 tangible y la especificación v1.0 resultante;
 2. los cambios estén implementados y cubiertos por pruebas;

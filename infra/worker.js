@@ -6,10 +6,14 @@
 //   GET /elevaciones?lats=LAT1,LAT2&lons=LON1,LON2
 //   GET /sigpac?lat=LAT&lon=LON
 //   POST /perfil  {puntos:[{lat,lon}, ...]} — MDT05 por ventanas WCS
+//   GET /api/rc1/asset — geometrías SIGPAC para el corredor público
+//   POST /api/rc1/usos — usos SIGPAC agrupados por parcela
 //
 // /resolver valida la URL inicial, cada redirección y la URL final
 // para impedir que el Worker se convierta en un proxy abierto.
 // =============================================================
+
+import { obtenerAssetPublico, obtenerUsosPublicos } from './rc1-public-data.js';
 
 const HOSTS_MAPS_CON_RUTA = new Set([
   "www.google.com",
@@ -339,7 +343,16 @@ export default {
       return new Response(null, { status: 204, headers: CORS });
     }
     const url = new URL(request.url);
-    if (url.pathname === '/perfil' && request.method === 'POST') {
+    if (url.pathname === '/api/rc1/usos' && request.method === 'POST') {
+      if (Number(request.headers.get('content-length')) > 12000) return json({ error: 'cuerpo demasiado grande' }, 413);
+      try {
+        const body = await request.text();
+        if (body.length > 12000) return json({ error: 'cuerpo demasiado grande' }, 413);
+        const uses = await obtenerUsosPublicos(JSON.parse(body).parcels);
+        return json({ parcels: uses });
+      } catch (e) { return json({ error: e.message }, e instanceof RangeError || e instanceof SyntaxError ? 400 : 502); }
+    }
+    if ((url.pathname === '/perfil' || url.pathname === '/api/rc1/perfil') && request.method === 'POST') {
       if (Number(request.headers.get('content-length')) > 20000) return json({ error: 'cuerpo demasiado grande' }, 413);
       let body;
       try { body = await request.text(); } catch { return json({ error: 'cuerpo inválido' }, 400); }
@@ -362,6 +375,17 @@ export default {
     }
     if (request.method !== "GET") {
       return json({ error: "método no permitido" }, 405, { Allow: "GET, OPTIONS" });
+    }
+
+    if (url.pathname === '/api/rc1/asset') {
+      const lat0 = parsearCoordenada(url.searchParams.get('lat0'), -90, 90);
+      const lon0 = parsearCoordenada(url.searchParams.get('lon0'), -180, 180);
+      const lat1 = parsearCoordenada(url.searchParams.get('lat1'), -90, 90);
+      const lon1 = parsearCoordenada(url.searchParams.get('lon1'), -180, 180);
+      if ([lat0, lon0, lat1, lon1].some(x => x === null)) return json({ error: 'coordenadas no válidas' }, 400);
+      try {
+        return json(await obtenerAssetPublico({ lat: lat0, lon: lon0 }, { lat: lat1, lon: lon1 }));
+      } catch (e) { return json({ error: e.message }, e instanceof RangeError ? 400 : 502); }
     }
 
     // ------------------- /resolver -------------------

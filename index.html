@@ -82,7 +82,11 @@
   /* ------- Panel inferior: datos, cálculo y resultado ------- */
   #panel{background:#fff;border-top:1px solid var(--borde);box-shadow:0 -6px 18px rgba(15,23,42,.06)}
   #barra{display:flex;gap:8px;align-items:center;padding:8px 10px;flex-wrap:wrap}
-  #hint-calc{font-size:.82rem;color:var(--gris);flex:1 1 220px;min-width:180px}
+  #hint-calc{font-size:.82rem;color:var(--gris);flex:1 1 220px;min-width:180px;display:flex;align-items:center;gap:9px;line-height:1.4}
+  #hint-calc.calculando{color:#9f1239;font-weight:700}
+  .indicador-calculo{width:18px;height:18px;flex:0 0 18px;border:3px solid #fecdd3;border-top-color:var(--rojo);border-radius:50%;animation:girar-calculo .75s linear infinite}
+  @keyframes girar-calculo{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.indicador-calculo{animation:none;border-color:var(--rojo);border-right-color:transparent}}
   #resumen{
     display:none;align-items:center;gap:8px;flex:1 1 260px;min-width:220px;
     border-radius:12px;padding:8px 12px;cursor:pointer;border:1px solid var(--borde);
@@ -218,7 +222,7 @@
       <button id="resumen" type="button" title="Ver / ocultar el detalle del resultado">
         <span class="dot"></span><span id="resumen-texto"></span>
       </button>
-      <span id="hint-calc"></span>
+      <span id="hint-calc" role="status" aria-live="polite" aria-atomic="true"><span id="indicador-calculo" class="indicador-calculo" aria-hidden="true" hidden></span><span id="hint-calc-texto"></span></span>
       <button class="btn" id="btn-datos" type="button">Datos ▾</button>
       <button class="btn primario" id="btn-calcular" type="button">Calcular alerta</button>
     </div>
@@ -480,6 +484,7 @@ const estado = {
   penAuto: { activo: true, cargando: false, datos: null, error: null },
   combAuto: true,
   rc1Cargando: false,
+  calculoLento: false,
   editor: null,
   // Marca si el usuario ha tocado los sliders manuales (sin valor operativo hasta entonces)
   velElegida: false,
@@ -914,6 +919,7 @@ function invalidarResultado() {
   rc1Control?.abort();
   rc1Control = null;
   estado.rc1Cargando = false;
+  estado.calculoLento = false;
   estado.resultado = null;
   limpiarCapasCalculo();
   document.getElementById("resultado").classList.remove("abierto");
@@ -1038,11 +1044,15 @@ async function calcular() {
   const controller = new AbortController();
   rc1Control = controller;
   estado.rc1Cargando = true;
+  estado.calculoLento = false;
   document.getElementById("comb-auto").textContent = estado.combAuto ?
     "Identificando usos y combustibles a lo largo del corredor…" : "Combustible manual uniforme seleccionado.";
   const slowTimer = setTimeout(() => {
-    if (rc1Control === controller && estado.combAuto) document.getElementById("comb-auto").textContent =
+    if (rc1Control !== controller) return;
+    estado.calculoLento = true;
+    if (estado.combAuto) document.getElementById("comb-auto").textContent =
       "SIGPAC está tardando en responder. Puedes esperar o cambiar a combustible manual.";
+    refrescar();
   }, 4000);
   refrescar();
   try {
@@ -1092,6 +1102,7 @@ async function calcular() {
     if (rc1Control === controller) {
       rc1Control = null;
       estado.rc1Cargando = false;
+      estado.calculoLento = false;
       refrescar();
     }
   }
@@ -1342,14 +1353,23 @@ function refrescar() {
   }
 
   const motivos = motivosBloqueo();
-  document.getElementById("btn-calcular").disabled = motivos.length > 0;
+  const botonCalcular = document.getElementById("btn-calcular");
+  botonCalcular.disabled = motivos.length > 0;
+  botonCalcular.textContent = estado.rc1Cargando ? "Calculando…" : "Calcular alerta";
   const hintCalc = document.getElementById("hint-calc");
-  if (motivos.length > 0) {
-    hintCalc.textContent = "Para calcular: " + motivos.join(" · ") + ".";
+  const textoCalculo = document.getElementById("hint-calc-texto");
+  hintCalc.classList.toggle("calculando", estado.rc1Cargando);
+  document.getElementById("indicador-calculo").hidden = !estado.rc1Cargando;
+  if (estado.rc1Cargando) {
+    textoCalculo.textContent = estado.calculoLento ?
+      "Seguimos calculando; la consulta de datos está tardando." :
+      "Calculando por tramos y consultando los datos…";
+  } else if (motivos.length > 0) {
+    textoCalculo.textContent = "Para calcular: " + motivos.join(" · ") + ".";
   } else if (estado.resultado === null) {
-    hintCalc.textContent = "Todo listo. Pulsa Calcular alerta; se usarán los modos automáticos o manuales que figuran en Datos.";
+    textoCalculo.textContent = "Todo listo. Pulsa Calcular alerta; se usarán los modos automáticos o manuales que figuran en Datos.";
   } else {
-    hintCalc.textContent = "";
+    textoCalculo.textContent = "";
   }
 }
 

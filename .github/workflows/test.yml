@@ -21,3 +21,18 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Start Worker in Cloudflare runtime
+        run: |
+          npx --yes wrangler@4.141.0 dev --local --ip 127.0.0.1 --port 8787 > /tmp/alerta-worker.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..30}; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:8787/api/rc1/asset?lat0=bad&lon0=0&lat1=1&lon1=1' || true)
+            if [ "$code" = '400' ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/alerta-worker.log
+          exit 1

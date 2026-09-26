@@ -25,7 +25,7 @@ const HOSTS_MAPS_DEDICADOS = new Set([
   "maps.google.es"
 ]);
 
-export const MAX_REDIRECCIONES = 5;
+const MAX_REDIRECCIONES = 5;
 
 const WCS_IGN = "https://servicios.idee.es/wcs-inspire/mdt";
 const COBERTURA_IGN = "Elevacion4258_5"; // MDT 5 m en lat/lon (EPSG:4258)

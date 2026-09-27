@@ -12,9 +12,9 @@
 | Cultivo permanente OV/VI/FY/FS/CI | Combustible positivo no tipificado | 8 |
 | Mezcla de clase tipificada con cultivo permanente | Valor conservador y conflicto visible | 8 |
 | AG/CA/ED/ZU inequívoco | Discontinuidad; convención `t_gap = 0` | no aplica |
-| TA/TH, IM/EP/ZC/ZV, SIGPAC ausente o uso sin correspondencia | NoData | indeterminada |
+| TA/TH, IM/EP/ZC/ZV, SIGPAC ausente o uso sin correspondencia | NoData conservado; ETA provisional con supuesto V0=8 | 8 supuesto |
 
-`V0 = 8` es el valor más alto de las cuatro clases actuales del modelo. Se utiliza como cota prudente **dentro de esta tabla**, solo donde el código acredita vegetación o forestal. No es una cota física demostrada para cualquier incendio. Una consulta fallida o un recinto sin código no se convierte en 8. Cuando falta V0 en cualquier tramo que no es una discontinuidad, la ETA automática completa de cada escenario queda indeterminada. La interfaz muestra esa condición y permite cambiar expresamente al modo manual.
+`V0 = 8` es el valor más alto de las cuatro clases actuales del modelo. Para combustible positivo no tipificado se aplica como hipótesis provisional. Cuando no hay evidencia de combustible, la clasificación sigue siendo NoData, pero el motor también calcula con 8 para entregar la ETA prudente solicitada; deja visible el supuesto por tramo y marca el escenario como provisional. Esto acorta el tiempo calculado dentro de la tabla VPIF, **no es una cota física demostrada** para cualquier incendio. Si faltan viento o pendiente se usan FV=3 o FP=2 y se señalan del mismo modo. El modo manual sigue disponible.
 
 La regla para FO evita inventar una especie: se muestra “combustible no tipificado”, no “pinar”. En viñedo, olivar y otros cultivos permanentes, 8 es una sobreestimación preventiva provisional de la velocidad base; cobertura, manejo y época pueden cambiar la realidad. Las clases PR/MT conservan por ahora `V0 = 6`, pese a la discrepancia con el intervalo 2–5 m/min del documento histórico.
 

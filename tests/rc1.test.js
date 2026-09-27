@@ -82,7 +82,10 @@ test('23 casos ejecutables del preflight: clases, suma, fronteras y NoData', () 
     assert.equal(run([30], [fuels[3]], [0, 0], [wind(speed), wind(speed), wind(speed), wind(speed)])
       .scenarios[0].eta_min, expected);
   }
-  assert.equal(run([30], [fuels[3]], [null, 0]).scenarios[0].eta_min, null);
+  const sinPerfil = run([30], [fuels[3]], [null, 0]).scenarios[0];
+  assert.equal(sinPerfil.eta_min, 30 / (8 * 2));
+  assert.equal(sinPerfil.status, 'provisional');
+  assert.equal(sinPerfil.rows[0].assumption_flags.elevation, true);
   assert.equal(sig('FO').status, 'nodata');
   const boundary = resolverCombustible({ sigpac: [{ uso: 'FO', feature_id: 2 }, { uso: 'FO', feature_id: 1 }],
     mfe: [mfeQ, mfeP] });
@@ -112,14 +115,24 @@ test('FV 10/20/30, agregación espacial y coherencia horaria', () => {
   assert.equal(horasEscenario(new Date('2026-09-26T10:20:00Z')).length, 4);
 });
 
-test('fallos de viento, combustible y MDT indeterminan ETA; exposición no altera ETA', () => {
+test('NoData usa los factores más rápidos de la tabla y conserva las banderas', () => {
   const f = sig('PS');
   const noWind = agregarVientoHorario([], '2026-09-26T10:00');
-  assert.equal(run([30], [f], [0, 0], [noWind, wind(), wind(), wind()]).scenarios[0].eta_min, null);
-  assert.equal(run([30], [sig('FO')], [0, 0]).scenarios[0].eta_min, null);
+  const sinViento = run([30], [f], [0, 0], [noWind, wind(), wind(), wind()]).scenarios[0];
+  assert.equal(sinViento.eta_min, 30 / (3 * 3));
+  assert.equal(sinViento.status, 'provisional');
+  assert.equal(sinViento.rows[0].nodata_flags.wind, true);
+  const sinCombustible = run([30], [sig('FO')], [0, 0]).scenarios[0];
+  assert.equal(sinCombustible.eta_min, 30 / 8);
+  assert.equal(sinCombustible.rows[0].v0, 8);
+  assert.equal(sinCombustible.rows[0].nodata_flags.fuel, true);
   assert.equal(resolverCombustible({ manual: 'quercus' }).v0, 4);
-  assert.equal(run([30], [sig('AG')], [0, 0], [noWind, wind(), wind(), wind()]).scenarios[0].eta_min, null);
-  assert.equal(run([30], [f], [0, null]).scenarios[0].eta_min, null);
+  const gap = run([30], [sig('AG')], [0, 0], [noWind, wind(), wind(), wind()]).scenarios[0];
+  assert.equal(gap.eta_min, 0);
+  assert.equal(gap.status, 'provisional');
+  const sinElevacion = run([30], [f], [0, null]).scenarios[0];
+  assert.equal(sinElevacion.eta_min, 30 / (3 * 2));
+  assert.equal(sinElevacion.rows[0].nodata_flags.elevation, true);
   const w1 = agregarVientoHorario([{ horaUtc: 'h', velocidadKmh: 10, direccionDesdeGrados: 270 }], 'h');
   const w2 = agregarVientoHorario([{ horaUtc: 'h', velocidadKmh: 10, direccionDesdeGrados: 90 }], 'h');
   const x = run([30], [f], [0, 0], [w1, w2, w1, w2]).scenarios;

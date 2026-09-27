@@ -95,7 +95,9 @@ La demo global histórica conserva estas correspondencias por ocupación; **no s
 | PA | 3 |
 | FO | 8 |
 
-En RC1, SIGPAC decide primero el dominio: PS→pastos; PR/MT→candidato matorral; PA→candidato pastos. MFE25 añade semántica en FO/PR/MT/PA cuando está disponible. Los candidatos múltiples conservan su etiqueta ambigua y usan provisionalmente max(V0). Si hay evidencia positiva de combustible pero no clase fiable (FO sin MFE o cultivo permanente OV/VI/FY/FS/CI), se usa V0=8, marcado como hipótesis conservadora. TA/TH y cualquier ausencia de SIGPAC permanecen indeterminados en modo automático. El modo manual permite escoger un combustible uniforme para todo el corredor. [Reglas completas](docs/RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
+En RC1, SIGPAC decide primero el dominio: PS→pastos; PR/MT→candidato matorral; PA→candidato pastos. MFE25 añade semántica en FO/PR/MT/PA cuando está disponible. Los candidatos múltiples conservan su etiqueta ambigua y usan provisionalmente max(V0). Si hay evidencia positiva de combustible pero no clase fiable (FO sin MFE o cultivo permanente OV/VI/FY/FS/CI), se usa V0=8, marcado como hipótesis conservadora. TA/TH y la ausencia de SIGPAC conservan su marca NoData; el cálculo usa V0=8 como hipótesis prudente y muestra una ETA provisional. Si faltan viento o elevación, usa FV=3 o FP=2 respectivamente, con las mismas advertencias. Ninguno de estos valores es una cota física garantizada. El modo manual permite escoger un combustible uniforme para todo el corredor. [Reglas completas](docs/RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
+
+La persona puede elegir corredores de más de 5 km: la aplicación divide automáticamente las consultas SIGPAC y el perfil en lotes pequeños. Una distancia larga aumenta la dependencia de fuentes externas y no amplía el alcance científico de esta demo para fases iniciales.
 
 No debe inferirse precisión temática de 30 m por el hecho de muestrear una línea cada ~30 m.
 

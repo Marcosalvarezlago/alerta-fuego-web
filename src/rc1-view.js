@@ -5,16 +5,18 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, NOMBRE_CUADRANTE,
   const t0 = r.scenarios[0];
   const exposicion = t0.exposure?.cuadrante ?? t0.exposure;
   const area = TEXTO_CUADRANTE[exposicion] || {
-    clase: 'alerta', etiqueta: 'Viento sin dato', titulo: 'Exposición indeterminada',
+    clase: 'alerta', etiqueta: 'Viento sin dato', titulo: 'Dirección del viento no disponible',
     desc: 'No se puede clasificar la exposición por viento en este escenario.'
   };
-  const eta = t0.eta_min === null ? 'Indeterminada' : Core.formatearTiempo(t0.eta_min);
-  const clave = t0.eta_min === null ? 'indeterminado' :
-    exposicion === 'sin_riesgo' ? 'vigilancia_preventiva' : Core.clasificarEscenario(t0.eta_min);
+  const provisional = t0.status === 'provisional';
+  const eta = Core.formatearTiempo(t0.eta_min) + (provisional ? ' · prudente' : '');
+  const temporal = Core.clasificarEscenario(t0.eta_min);
+  const clave = provisional && temporal === 'vigilancia_preventiva' ? 'provisional' :
+    exposicion === 'sin_riesgo' ? 'vigilancia_preventiva' : temporal;
   const protocolo = PROTOCOLOS[clave];
   const escenarios = r.scenarios.map(s =>
     `<div class="escenario"><small>${esc(s.scenario)} · ${esc(s.horaUtc || 'sin hora')}</small>` +
-    `<b>${s.eta_min === null ? 'Indeterminada' : Core.formatearTiempo(s.eta_min)}</b>` +
+    `<b>${Core.formatearTiempo(s.eta_min)}${s.status === 'provisional' ? ' · prudente' : ''}</b>` +
     `<small>${s.exposure ? esc(NOMBRE_CUADRANTE[s.exposure.cuadrante ?? s.exposure] ||
       s.exposure.cuadrante || s.exposure) : 'viento sin dirección'}</small></div>`
   ).join('');
@@ -31,7 +33,8 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, NOMBRE_CUADRANTE,
   const fallback = t0.rows.filter(row => row.fallback === 'untyped_v0_8').length;
   const combustibleManual = r.source_versions.fuel_source === 'combustible manual homogéneo';
   const fuenteCombustible = combustibleManual ? 'combustible manual homogéneo' :
-    `SIGPAC FEGA · ${r.source_versions.mfe_count > 0 ? 'MFE25 local' : 'MFE25 no disponible en esta ejecución'}`;
+    esc(r.source_versions.fuel_source || 'SIGPAC FEGA') + ' · ' +
+    (r.source_versions.mfe_count > 0 ? 'MFE25 local' : 'MFE25 no disponible en esta ejecución');
   const fuentes = [];
   if (!combustibleManual) fuentes.push('<a href="https://sigpac-hubcloud.es/" target="_blank" rel="noopener noreferrer">SIGPAC/FEGA</a>');
   if (r.source_versions.mfe_count > 0) fuentes.push('<a href="https://www.miteco.gob.es/" target="_blank" rel="noopener noreferrer">MITECO</a>');
@@ -39,7 +42,7 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, NOMBRE_CUADRANTE,
   if (r.profile_source?.startsWith('Open-Meteo') || r.source_versions.wind_source?.startsWith('Open-Meteo')) {
     fuentes.push('<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>');
   }
-  const detalle = sinDato ? `${sinDato} tramos sin datos suficientes. La ETA queda indeterminada.` :
+  const detalle = sinDato ? `${sinDato} tramos usan hipótesis prudentes para datos ausentes: V0 = 8, FV = 3 o FP = 2 según falte combustible, viento o pendiente. La ETA es provisional y no garantiza un plazo de llegada.` :
     fallback ? `${fallback} tramos usan V0 = 8 provisional por combustible positivo no tipificado.` :
       'Todos los tramos tienen combustible identificado.';
   document.getElementById('resultado').innerHTML =
@@ -49,7 +52,7 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, NOMBRE_CUADRANTE,
     `<div class="v">${formatearMetros(r.distance_m)}</div><div class="s">Incendio → zona vulnerable.</div></div>` +
     `<div class="metrica"><div class="l">ETA t0</div><div class="v">${eta}</div>` +
     `<div class="s">${exposicion === 'sin_riesgo' ? 'Referencia condicional; vigilancia preventiva.' :
-      'Estimación orientativa por tramos.'}</div></div>` +
+      (provisional ? 'ETA provisional con hipótesis prudentes; no es un tiempo seguro.' : 'Estimación orientativa por tramos.')}</div></div>` +
     `<div class="metrica"><div class="l">Tramos</div><div class="v">${t0.rows.length}</div>` +
     `<div class="s">VPIF y pendiente calculadas en cada tramo.</div></div></div>` +
     `<div class="datos-usados"><b>Datos usados:</b> ${fuenteCombustible} · ` +
@@ -60,7 +63,7 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, NOMBRE_CUADRANTE,
     `<ul>${acciones}</ul></details>` +
     `<details class="bloque"><summary>Detalles técnicos de los tramos</summary><div class="tec">` +
     `Modelo ${esc(r.model_version)}. Velocidades base y reglas experimentales. ` +
-    `Sin combustible comprobable se deja la ETA indeterminada.` +
+    `Si faltan datos, el cálculo usa el factor más rápido de la tabla VPIF para ese dato (V0 = 8, FV = 3, FP = 2). Es una hipótesis prudente del modelo, no una cota física garantizada. Las banderas NoData se conservan.` +
     `<div class="tramos-wrap"><table class="tramos"><thead><tr><th>#</th><th>Recorrido</th>` +
     `<th>Combustible y regla</th><th>V0</th><th>Pendiente</th><th>VPIF</th><th>Tiempo</th>` +
     `</tr></thead><tbody>${filas}</tbody></table></div></div></details>` +

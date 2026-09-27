@@ -50,7 +50,7 @@ test('cobertura del asset evita usar datos temáticos fuera del piloto', async (
   await assert.rejects(ejecutarRc1(inicio, { lat: 1, lon: 1 }, asset), /fuera de la cobertura/);
 });
 
-test('cultivo permanente y FO sin MFE usan V0 prudente; tierra arable queda indeterminada', async () => {
+test('cultivo permanente y FO sin MFE usan V0 prudente; TA usa hipótesis visible', async () => {
   for (const [uso, expectedV0] of [['VI', 8], ['FO', 8], ['TA', null]]) {
     const copy = structuredClone(asset);
     copy.sigpac[0].properties.uso = uso;
@@ -58,9 +58,12 @@ test('cultivo permanente y FO sin MFE usan V0 prudente; tierra arable queda inde
       pendienteManual: 0, vientoManual: { haciaGrados: 90, velocidadKmh: 10 }, now,
       fetcher: () => { throw new Error('no debe consultar proveedores con entradas manuales'); }
     });
-    assert.equal(result.scenarios[0].rows[0].v0, expectedV0, uso);
-    assert.equal(result.scenarios[0].eta_min === null, expectedV0 === null, uso);
-    if (expectedV0) assert.equal(result.scenarios[0].rows[0].fallback, 'untyped_v0_8');
+    const row = result.scenarios[0].rows[0];
+    assert.equal(row.v0, expectedV0 ?? 8, uso);
+    assert.ok(result.scenarios[0].eta_min > 0, uso);
+    assert.equal(row.nodata_flags.fuel, expectedV0 === null, uso);
+    assert.equal(result.scenarios[0].status, expectedV0 === null ? 'provisional' : 'ok');
+    if (expectedV0) assert.equal(row.fallback, 'untyped_v0_8');
   }
 });
 
@@ -103,4 +106,71 @@ test('la versión pública completa usos SIGPAC por lotes antes de clasificar', 
   assert.equal(result.scenarios[0].rows[0].v0, 6);
   assert.ok(result.scenarios[0].eta_min > 0);
   assert.equal(calls.filter(url => url.endsWith('/usos')).length, 1);
+});
+
+
+test('corredor de más de 5 km divide asset y perfil sin bloquear el cálculo', async () => {
+  const far = { lat: 0, lon: 0.075 };
+  const calls = { asset: [], perfil: [] };
+  const longAsset = structuredClone(asset);
+  longAsset.bbox = [-0.1, -0.1, 0.1, 0.1];
+  longAsset.sigpac[0].geometry.coordinates = [[[-0.1, -0.1], [0.1, -0.1],
+    [0.1, 0.1], [-0.1, 0.1], [-0.1, -0.1]]];
+  const fetcher = async (url, options = {}) => {
+    if (String(url).includes('/asset?')) {
+      calls.asset.push(String(url));
+      return { ok: true, json: async () => structuredClone(longAsset) };
+    }
+    if (String(url).endsWith('/perfil')) {
+      const count = JSON.parse(options.body).puntos.length;
+      calls.perfil.push(count);
+      return { ok: true, json: async () => ({ elevaciones: Array(count).fill(100) }) };
+    }
+    if (String(url).includes('/v1/forecast')) {
+      const count = new URL(url).searchParams.get('latitude').split(',').length;
+      return { ok: true, json: async () => Array.from({ length: count }, () => ({
+        hourly: { time: hours, wind_speed_10m: [10, 20, 30, 0],
+          wind_direction_10m: [270, 270, 270, 270] }
+      })) };
+    }
+    throw new Error('Consulta inesperada: ' + url);
+  };
+  const result = await ejecutarRc1Automatico(inicio, far,
+    { apiBase: 'https://local.test', fetcher, now });
+  assert.ok(result.distance_m > 5000);
+  assert.ok(result.scenarios[0].rows.length > 255);
+  assert.equal(calls.asset.length, 3);
+  assert.ok(calls.perfil.length >= 2);
+  assert.ok(calls.perfil.every(n => n <= 128));
+  assert.ok(Number.isFinite(result.scenarios[0].eta_min));
+  assert.equal(result.scenarios[0].status, 'ok');
+});
+
+test('fallos de proveedores conservan ETA provisional y procedencia', async () => {
+  const result = await ejecutarRc1(inicio, fin, asset, {
+    workerUrl: 'https://local.test', permitirFallbackOpenMeteo: true, now,
+    fetcher: async () => { throw new Error('proveedor caído'); }
+  });
+  assert.ok(result.scenarios[0].eta_min > 0);
+  assert.equal(result.scenarios[0].status, 'provisional');
+  assert.equal(result.scenarios[0].rows[0].nodata_flags.elevation, true);
+  assert.equal(result.scenarios[0].rows[0].nodata_flags.wind, true);
+  assert.equal(result.profile_fallback, 'prudential_fp_2');
+  assert.match(result.source_versions.wind_source, /prudente/);
+});
+
+test('si SIGPAC falla se informa del dato ausente y se calcula ETA prudente', async () => {
+  const fetcher = async (url) => {
+    if (String(url).includes('/asset?')) throw new Error('SIGPAC caído');
+    throw new Error('No debería llamar a otros proveedores con los controles manuales');
+  };
+  const result = await ejecutarRc1Automatico(inicio, fin, {
+    apiBase: 'https://local.test', fetcher, now,
+    pendienteManual: 0, vientoManual: { haciaGrados: 90, velocidadKmh: 10 }
+  });
+  assert.ok(Number.isFinite(result.scenarios[0].eta_min));
+  assert.equal(result.scenarios[0].status, 'provisional');
+  assert.equal(result.scenarios[0].rows[0].nodata_flags.fuel, true);
+  assert.equal(result.source_versions.incomplete_parts, 1);
+  assert.match(result.source_versions.fuel_source, /parcial/);
 });

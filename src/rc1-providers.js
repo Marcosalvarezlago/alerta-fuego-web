@@ -1,4 +1,4 @@
-import { agregarVientoHorario, horasEscenario } from './rc1-engine.js';
+import { agregarVientoHorario, horasEscenario } from './rc1-engine.js?v=prudente-1';
 
 async function jsonConTimeout(url, options = {}, fetcher = fetch, ms = 12000) {
   const controller = new AbortController();
@@ -16,20 +16,57 @@ async function jsonConTimeout(url, options = {}, fetcher = fetch, ms = 12000) {
   }
 }
 
+function lotesPerfil(puntos) {
+  const lotes = [];
+  let from = 0;
+  while (from < puntos.length - 1) {
+    let to = from + 1;
+    let distance = 0;
+    while (to < puntos.length - 1 && to - from < 127) {
+      const next = Math.hypot((puntos[to + 1].lat - puntos[to].lat) * 111195,
+        (puntos[to + 1].lon - puntos[to].lon) * 111195 *
+        Math.cos((puntos[to + 1].lat + puntos[to].lat) * Math.PI / 360));
+      if (distance + next > 4000) break;
+      distance += next;
+      to++;
+    }
+    lotes.push({ from, to, puntos: puntos.slice(from, to + 1) });
+    from = to;
+  }
+  return lotes;
+}
+
+async function mapLimit(items, limit, task) {
+  const result = Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      result[index] = await task(items[index]);
+    }
+  }));
+  return result;
+}
+
 export async function obtenerPerfil(puntos, { workerUrl, signal, fetcher = fetch,
   permitirFallbackOpenMeteo = false } = {}) {
-  if (!Array.isArray(puntos) || puntos.length < 2 || puntos.length > 256) throw new RangeError('perfil fuera de límites');
+  if (!Array.isArray(puntos) || puntos.length < 2) throw new RangeError('perfil fuera de límites');
   if (workerUrl) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const response = await jsonConTimeout(`${workerUrl.replace(/\/$/, '')}/perfil`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ puntos }), signal
-        }, fetcher, 20000);
-        if (!Array.isArray(response.elevaciones) || response.elevaciones.length !== puntos.length) {
-          throw new Error('perfil inválido');
-        }
-        return { elevations: response.elevaciones.map(x => Number.isFinite(x) ? x : null),
+        const lotes = lotesPerfil(puntos);
+        const responses = await mapLimit(lotes, 3, async lote => {
+          const response = await jsonConTimeout(workerUrl.replace(/\/$/, '') + '/perfil', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ puntos: lote.puntos }), signal
+          }, fetcher, 20000);
+          if (!Array.isArray(response.elevaciones) ||
+              response.elevaciones.length !== lote.puntos.length) throw new Error('perfil inválido');
+          return response.elevaciones;
+        });
+        const elevations = responses.flatMap((values, i) => (i ? values.slice(1) : values))
+          .map(x => Number.isFinite(x) ? x : null);
+        return { elevations,
           source: workerUrl.startsWith('http://127.0.0.1') || workerUrl.startsWith('http://localhost')
             ? 'IGN MDT05 WCS, servidor local' : 'IGN MDT05 WCS, servicio web', fallback: null };
       } catch (error) {

@@ -326,8 +326,8 @@ window.CONFIG_RC1_API = "https://alerta-fuego-enlaces.marcosalvarez1w.workers.de
 </script>
 <script type="module">
 import * as Core from "./src/core.js";
-import { ejecutarRc1Automatico } from "./src/rc1-run.js?v=rc1-public-2";
-import { pintarResultadoRc1 } from "./src/rc1-view.js?v=rc1-public-2";
+import { ejecutarRc1Automatico } from "./src/rc1-run.js?v=prudente-1";
+import { pintarResultadoRc1 } from "./src/rc1-view.js?v=prudente-1";
 
 "use strict";
 // Modelo, geometría, conversiones y parser: fuente única comprobable en src/core.js.
@@ -398,6 +398,16 @@ const PROTOCOLOS = {
       "Prepara documentación, medicación, animales y vías de salida.",
       "Consulta solo fuentes oficiales.",
       "No uses esta estimación para apurar los tiempos."
+    ]
+  },
+  "provisional": {
+    encabezado: "⚠️ Preparación con datos incompletos",
+    titulo: "ETA PROVISIONAL: NO APLACES DECISIONES",
+    acciones: [
+      "La cifra mostrada depende de supuestos prudentes del modelo y no garantiza tiempo disponible.",
+      "Consulta la evolución y las indicaciones de los servicios oficiales.",
+      "Prepara personas, animales, documentación y vías de salida sin esperar a que se cumpla la ETA.",
+      "Ante peligro inmediato, llama al 112."
     ]
   },
   "indeterminado": {
@@ -1305,10 +1315,6 @@ function usarMiUbicacion() {
 function motivosBloqueo() {
   const motivos = [];
   if (!estado.fuego || !estado.zona) motivos.push("fija el incendio y la zona vulnerable en el mapa");
-  if (estado.fuego && estado.zona && Core.calcularDistanciaM(
-    estado.fuego.lat, estado.fuego.lon, estado.zona.lat, estado.zona.lon) > 5000) {
-    motivos.push("el corredor RC1 admite hasta 5 km");
-  }
   if (estado.rc1Cargando) motivos.push("calculando por tramos…");
 
   const va = estado.vientoAuto, pa = estado.penAuto;

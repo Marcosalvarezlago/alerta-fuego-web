@@ -34,7 +34,7 @@ test('la ETA única muestra los tramos, reserva hipótesis al detalle y etiqueta
       exposure: { cuadrante: 'riesgo' }, rows: [row] }],
       source_versions: { fuel_source: 'SIGPAC parcial', mfe_count: 0,
         wind_source: 'Open-Meteo pronóstico horario 10 m' },
-      profile_source: 'IGN MDT05 WCS', model_version: 'vpif-rc1-horario-1',
+      profile_source: 'IGN MDT05 WCS', model_version: 'vpif-rc1-cruce-2',
       distance_m: 30 };
     pintarResultadoRc1(result, context);
     const html = elements.get('resultado').innerHTML;
@@ -51,6 +51,15 @@ test('la ETA única muestra los tramos, reserva hipótesis al detalle y etiqueta
     assert.match(html, /1 tramo sin clase de combustible/);
     assert.doesNotMatch(html, /Comparación de viento por horas|Viento \+1 h/);
 
+    result.scenarios[0].rows[0].gap_flag = true;
+    result.scenarios[0].rows[0].label = 'cruce incierto CA';
+    pintarResultadoRc1(result, context);
+    const cruce = elements.get('resultado').innerHTML;
+    assert.match(cruce, /1 tramo de cruce incierto SIGPAC: V0 = 8 m\/min/);
+    assert.match(cruce, /tiempo de esos cruces es positivo/);
+    assert.doesNotMatch(cruce, /tiempo cero/);
+
+    result.scenarios[0].rows[0].gap_flag = false;
     result.scenarios[0].status = 'ok';
     result.scenarios[0].rows[0].nodata_flags.fuel = false;
     result.source_versions = { fuel_source: 'combustible manual homogéneo',

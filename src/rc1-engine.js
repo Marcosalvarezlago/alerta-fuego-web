@@ -1,8 +1,8 @@
 import { obtenerFactorViento, clasificarCuadrante, calcularRumboGrados,
   direccionHaciaDesdeMeteo } from './core.js';
-import { V0_RC1 } from './rc1-fuel.js';
+import { V0_RC1 } from './rc1-fuel.js?v=cruce-2';
 
-export const RC1_VERSION = 'vpif-rc1-horario-1';
+export const RC1_VERSION = 'vpif-rc1-cruce-2';
 const V0_PRUDENTE = Math.max(...Object.values(V0_RC1));
 const FV_PRUDENTE = 3;
 const FP_PRUDENTE = 2;
@@ -81,18 +81,17 @@ export function calcularRc1({ segments, fuels, elevations, winds, inicio, fin,
     const fpMedido = factorPendienteFirmada(slope);
     const gap = fuel?.status === 'gap';
     const fuelNoData = !gap && !(Number.isFinite(fuel?.v0) && fuel.v0 > 0);
-    const elevationNoData = !gap && fpMedido === null;
-    const v0 = fuelNoData ? V0_PRUDENTE : fuel?.v0 ?? null;
+    const elevationNoData = fpMedido === null;
+    const v0 = gap || fuelNoData ? V0_PRUDENTE : fuel.v0;
     const fp = elevationNoData ? FP_PRUDENTE : fpMedido;
-    const tramo = gap ? { minutos: 0, finMs: cursor, periodos: [] } :
-      tiempoTramo(segment.distance_m, v0, fp, cursor, windMap, manual);
+    const tramo = tiempoTramo(segment.distance_m, v0, fp, cursor, windMap, manual);
     const inicioTramoMs = cursor;
     cursor = tramo.finMs;
     const windNoData = tramo.periodos.some(periodo => periodo.sinViento);
     const nodata_flags = { fuel: fuelNoData, elevation: elevationNoData, wind: windNoData };
     const fvValores = [...new Set(tramo.periodos.map(periodo => periodo.fv))];
     const fv = fvValores.length === 1 ? fvValores[0] : null;
-    const vpif = gap ? null : segment.distance_m / tramo.minutos;
+    const vpif = segment.distance_m / tramo.minutos;
     return { run_id, model_version: RC1_VERSION, asset_id, ...segment,
       ...fuel, v0, label: fuelNoData ?
         (fuel?.label ?? 'combustible sin dato') + ' · supuesto V0=' + V0_PRUDENTE : fuel?.label,
@@ -102,7 +101,7 @@ export function calcularRc1({ segments, fuels, elevations, winds, inicio, fin,
       end_at_utc: new Date(cursor).toISOString(),
       wind_periods: tramo.periodos, wind_points: tramo.periodos[0]?.wind_points ?? [],
       fv, vpif, t_i_min: tramo.minutos, gap_flag: gap, nodata_flags,
-      assumption_flags: { ...nodata_flags }, source_versions, created_at };
+      assumption_flags: { ...nodata_flags, crossing: gap }, source_versions, created_at };
   });
   const primeraHora = Math.floor(inicioMs / HORA_MS) * HORA_MS;
   const windInicial = manual ?? windMap.get(primeraHora);

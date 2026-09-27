@@ -11,7 +11,7 @@ La RC1 conserva el mapa, los marcadores, la entrada de coordenadas o enlaces de 
 1. Marca el incendio y la zona vulnerable en el mapa o introduce sus coordenadas.
 2. Abre «Datos» si quieres revisar las fuentes o activar un modo manual de pendiente, viento o combustible.
 3. Pulsa «Calcular alerta».
-4. Lee la ETA única, la distancia, el número de tramos y el protocolo. Abre «Cómo se calculó» para examinar fuentes, reglas e hipótesis por tramo.
+4. Lee la ETA única, la distancia y el protocolo. Abre «Cómo se calculó» para ver el número de tramos, las fuentes, las reglas y las hipótesis de cada tramo.
 
 El viento automático procede de un pronóstico horario de Open-Meteo. El cálculo aplica la hora prevista al llegar a cada posición, incluso si cambia en medio de un tramo. El cuadrante del mapa solo describe la dirección inicial, no todas las direcciones futuras. En modo manual, la dirección y la velocidad elegidas se aplican de manera uniforme.
 
@@ -21,7 +21,7 @@ El combustible automático se obtiene por tramo de SIGPAC; el servidor local pue
 
 ## Cómo interpretar los resultados
 
-La ETA suma los tiempos calculados para los tramos. En la tabla técnica se identifican los datos manuales y los tramos en los que falta un valor automático. Cuando falta clase de combustible, viento o elevación, el programa mantiene una ETA provisional con V0=8, FV=3 o FP=2, respectivamente. Son los valores más rápidos de la tabla VPIF actual y no constituyen una cota garantizada para un incendio real. Una discontinuidad inequívoca usa tiempo cero por convención; esto no demuestra que el fuego la atraviese instantáneamente ni que lo detenga.
+La ETA suma los tiempos calculados para los tramos. En la tabla técnica se identifican los datos manuales y los tramos en los que falta un valor automático. Cuando falta clase de combustible, viento o elevación, el programa mantiene una ETA provisional con V0=8, FV=3 o FP=2, respectivamente. Son los valores más rápidos de la tabla VPIF actual y no constituyen una cota garantizada para un incendio real. Los tramos AG/CA/ED/ZU tienen un tiempo positivo calculado con V0=8 y el viento y la pendiente correspondientes. Es una hipótesis provisional de cruce incierto para el aviso temprano: no demuestra que el fuego cruce ni que la barrera lo detenga; tampoco modeliza pavesas.
 
 El resultado muestra un protocolo vinculado al tiempo estimado. El color o cuadrante de viento inicial no reduce su urgencia. Ante un peligro real, hay que seguir las indicaciones oficiales aunque contradigan la web.
 
@@ -31,4 +31,4 @@ La aplicación comunica coordenadas a Open-Meteo para viento y, si hace falta, e
 
 Las peticiones automáticas pueden fallar por red, tiempo de espera, respuesta inválida, celdas sin elevación o fin del horizonte del pronóstico. El programa registra la incidencia y el supuesto empleado en «Cómo se calculó». [Diagnóstico de fuentes](RC1_FALLOS_PROVEEDORES.md).
 
-La RC1 pública es una demo experimental sin validación predictiva u operativa. Siguen abiertas la discrepancia histórica de matorral (intervalo 2–5 frente a V0=6 m/min), la regla para mezclas de combustible, las discontinuidades y el papel de la dirección del viento en la velocidad. [Validaciones pendientes](VALIDACION_MVP.md) y [documentación técnica](DOCUMENTACION_TECNICA.md).
+La RC1 pública es una demo experimental sin validación predictiva u operativa. Siguen abiertas la discrepancia histórica de matorral (intervalo 2–5 frente a V0=6 m/min), la regla para mezclas de combustible, los cruces inciertos y el papel de la dirección del viento en la velocidad. [Validaciones pendientes](VALIDACION_MVP.md) y [documentación técnica](DOCUMENTACION_TECNICA.md).

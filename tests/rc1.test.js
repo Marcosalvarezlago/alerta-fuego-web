@@ -80,7 +80,10 @@ test('23 casos ejecutables del preflight: clases, suma, fronteras y NoData', () 
   assert.notEqual(untyped.label, 'pinar');
   for (const code of ['AG', 'ZU']) {
     const gap = sig(code);
-    assert.equal(run([30], [gap], [0, 0]).scenarios[0].eta_min, 0);
+    const result = run([30], [gap], [0, 0]).scenarios[0];
+    assert.equal(result.eta_min, 30 / 8);
+    assert.equal(result.status, 'provisional');
+    assert.equal(result.rows[0].assumption_flags.crossing, true);
   }
   assert.equal(run([30], [fuels[3]], [0, 9]).scenarios[0].eta_min, 2.5);
   assert.ok(Math.abs(run([30], [fuels[3]], [0, -3]).scenarios[0].eta_min - 30 / 5.6) < 1e-10);
@@ -138,7 +141,11 @@ test('NoData usa los factores más rápidos de la tabla y conserva las banderas'
   assert.equal(sinCombustible.rows[0].nodata_flags.fuel, true);
   assert.equal(resolverCombustible({ manual: 'quercus' }).v0, 4);
   const gap = run([30], [sig('AG')], [0, 0], [noWind]).scenarios[0];
-  assert.equal(gap.eta_min, 0);
+  assert.equal(gap.eta_min, 30 / (8 * 3));
+  assert.equal(gap.rows[0].nodata_flags.wind, true);
+  const cruceSinElevacion = run([30], [sig('ZU')], [null, null]).scenarios[0];
+  assert.equal(cruceSinElevacion.eta_min, 30 / (8 * 2));
+  assert.equal(cruceSinElevacion.rows[0].nodata_flags.elevation, true);
   assert.equal(gap.status, 'provisional');
   const sinElevacion = run([30], [f], [0, null]).scenarios[0];
   assert.equal(sinElevacion.eta_min, 30 / (3 * 2));
@@ -160,4 +167,19 @@ test('el viento cambia dentro de un tramo exactamente al cruzar la hora', () => 
   assert.deepEqual(result.rows[0].wind_periods.map(p => Math.round(p.distancia_m)), [3, 27]);
   assert.deepEqual(result.wind_hours_used, ['2026-09-26T10:00', '2026-09-26T11:00']);
   assert.equal(result.rows[0].end_at_utc, '2026-09-26T11:03:00.000Z');
+});
+
+test('un cruce incierto consume tiempo y aplica el pronóstico al cambiar de hora', () => {
+  const result = run([30, 30], [sig('CA'), sig('PS')], [0, 0, 0],
+    [wind(0, '2026-09-26T10:00'), wind(30, '2026-09-26T11:00')],
+    '2026-09-26T10:59:00Z').scenarios[0];
+  const cruce = result.rows[0];
+  assert.ok(Math.abs(cruce.t_i_min - (1 + 22 / 24)) < 1e-8);
+  assert.deepEqual(cruce.wind_periods.map(p => p.horaUtc),
+    ['2026-09-26T10:00', '2026-09-26T11:00']);
+  assert.ok(cruce.vpif > 0);
+  assert.equal(cruce.assumption_flags.crossing, true);
+  assert.ok(result.rows[1].start_at_utc > '2026-09-26T11:00:00.000Z');
+  assert.ok(result.eta_min > cruce.t_i_min);
+  assert.equal(result.status, 'provisional');
 });

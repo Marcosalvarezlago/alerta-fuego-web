@@ -12,14 +12,14 @@
 | FO sin clase MFE25 concluyente | Forestal no tipificado; no se etiqueta pinar | 8 provisional |
 | Cultivo permanente o asociación CF/CI/CS/CV/FF/FL/FS/FV/FY/OC/OF/OV/VF/VI/VO | Combustible agrícola no tipificado | 8 provisional |
 | Mezcla de clase tipificada con cultivo permanente | Valor conservador y conflicto visible | 8 |
-| AG/CA/ED/ZU inequívoco | Discontinuidad; convención `t_gap = 0` | no aplica |
+| AG/CA/ED/ZU inequívoco | Cruce incierto; hipótesis de aviso temprano con tiempo positivo | 8 provisional |
 | TA/TH, IM/EP/ZC/ZV, SIGPAC ausente o uso sin correspondencia | NoData conservado; ETA provisional con supuesto V0=8 | 8 supuesto |
 
 `V0 = 8` es el valor más alto de las cuatro clases actuales del modelo. Para combustible positivo no tipificado se aplica como hipótesis provisional. Cuando no hay evidencia de combustible, la clasificación sigue siendo NoData, pero el motor también calcula con 8 para entregar la ETA prudente solicitada; deja visible el supuesto por tramo y marca la ETA como provisional en los detalles técnicos. Esto acorta el tiempo calculado dentro de la tabla VPIF, **no es una cota física demostrada** para cualquier incendio. Si faltan viento o pendiente se usan FV=3 o FP=2 y se señalan del mismo modo. El modo manual sigue disponible.
 
 La regla para FO evita inventar una especie: se muestra “combustible no tipificado”, no “pinar”. En pasto con arbolado sin MFE25 concluyente y en cultivos permanentes, 8 es una hipótesis preventiva provisional de la velocidad base; cobertura, manejo y época pueden cambiar la realidad. No se asigna la etiqueta «pinar» por escoger 8. Las clases PR/MT conservan por ahora `V0 = 6`, pese a la discrepancia con el intervalo 2–5 m/min del documento histórico.
 
-El cálculo por tramos integra `VPIF_i,h = V0_i · FV_h · FP_i` en la hora que corresponde al avance del recorrido y suma los tiempos parciales en una ETA única. Viento horario y pendiente firmada se documentan en [DOCUMENTACION_TECNICA.md](DOCUMENTACION_TECNICA.md). Las discontinuidades con tiempo cero son una convención contable del modelo; **no demuestran que el fuego las atraviese instantáneamente ni que detengan un incendio**.
+El cálculo por tramos integra `VPIF_i,h = V0_i · FV_h · FP_i` en la hora que corresponde al avance del recorrido y suma los tiempos parciales en una ETA única. Viento horario y pendiente firmada se documentan en [DOCUMENTACION_TECNICA.md](DOCUMENTACION_TECNICA.md). Los cruces inciertos AG/CA/ED/ZU se integran con V0=8, viento horario y pendiente del tramo. La clase de uso SIGPAC no mide la anchura efectiva ni la posibilidad de propagación por pavesas: **la ETA no acredita ni cruce ni detención**. [Decisión, alternativas y plan de investigación](adr/0002-cruces-inciertos-eta-rc1.md).
 
 ## Cuestiones para revisión técnica antes de consolidar la política
 
@@ -27,7 +27,7 @@ El cálculo por tramos integra `VPIF_i,h = V0_i · FV_h · FP_i` en la hora que 
 2. ¿Deben variar estas hipótesis según densidad, manejo, época o cobertura del cultivo? ¿Qué campo verificable permitiría hacerlo automáticamente?
 3. ¿Es adecuado usar el máximo entre candidatos MFE25/SIGPAC en límites y conflictos, o conviene otra regla?
 4. ¿Se mantiene `V0 = 6` para PR/MT y el matorral MFE25 frente al intervalo histórico 2–5?
-5. ¿Cómo debe tratarse una discontinuidad AG/CA/ED/ZU en una ETA de recorrido? ¿Qué prueba permite considerarla cortafuegos real?
+5. Validar la hipótesis provisional V0=8 para AG/CA/ED/ZU con anchura, continuidad, igniciones secundarias y casos observados. ¿Qué evidencia permitiría sustituirla por reglas diferenciadas y detectar una barrera eficaz?
 6. ¿Debe mostrarse una ETA condicional cuando la zona cae fuera del sector principal según el viento?
 
 **Criterio de cierre:** registrar respuesta, fecha y versión de reglas; modificar código, pruebas y textos si cambia una hipótesis; volver a validar con corredores reales antes de presentar el modelo como fiable.

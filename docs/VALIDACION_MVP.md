@@ -23,6 +23,7 @@ Tras implementación:
 - [ ] El tiempo total se calcula como suma de tiempos parciales y no mezcla unidades.
 - [ ] Pendiente local y sentido de avance se calculan por segmento.
 - [ ] Cada combustible automático conserva procedencia y regla de traducción.
+- [ ] Los cruces AG/CA/ED/ZU se comparan con casos reales; no se interpreta V0=8 como velocidad medida ni como garantía de paso.
 - [ ] Casos ambiguos o sin dato no reciben una clasificación silenciosa.
 - [ ] No se confunde resolución de muestreo con precisión temática de la fuente.
 
@@ -55,7 +56,7 @@ Tras implementación:
 
 ## 6. Gate de pruebas
 
-- [x] `npm test` pasa íntegramente (39 pruebas, 2026-09-27).
+- [x] `npm test` pasa íntegramente (40 pruebas, 2026-09-27).
 - [x] Pruebas de segmentación, suma temporal, cambio de hora y fronteras RC1.
 - [ ] Casos de regresión del modelo actual siguen siendo reproducibles cuando proceda.
 - [ ] Pruebas de integración en navegador cubren estado automático/manual e invalidación.

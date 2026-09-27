@@ -23,7 +23,7 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, PROTOCOLOS, forma
   const pendienteSinDato = cuenta('elevation');
   const vientoSinDato = cuenta('wind');
   const noTipificado = resultado.rows.filter(row => row.fallback === 'untyped_v0_8').length;
-  const discontinuidades = resultado.rows.filter(row => row.gap_flag).length;
+  const crucesInciertos = resultado.rows.filter(row => row.gap_flag).length;
   const fuentes = [];
   if (!combustibleManual) fuentes.push('<a href="https://sigpac-hubcloud.es/" target="_blank" rel="noopener noreferrer">SIGPAC/FEGA</a>');
   if (sv.mfe_count > 0) fuentes.push('<a href="https://www.miteco.gob.es/" target="_blank" rel="noopener noreferrer">MITECO</a>');
@@ -48,8 +48,9 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, PROTOCOLOS, forma
   if (noTipificado) suposiciones.push(`${cantidadTramos(noTipificado)} con combustible positivo no tipificado: V0 = 8 m/min.`);
   if (pendienteSinDato) suposiciones.push(`${cantidadTramos(pendienteSinDato)} con elevación incompleta: FP = 2.`);
   if (vientoSinDato) suposiciones.push(`${cantidadTramos(vientoSinDato)} atravesados en horas sin pronóstico: FV = 3.`);
-  const notaDiscontinuidad = discontinuidades ?
-    `<p><b>Discontinuidades:</b> ${cantidadTramos(discontinuidades)} con tiempo cero por convención de esta versión. No implica que el fuego cruce una barrera instantáneamente.</p>` : '';
+  if (crucesInciertos) suposiciones.push(`${cantidadTramos(crucesInciertos)} de cruce incierto SIGPAC: V0 = 8 m/min.`);
+  const notaDiscontinuidad = crucesInciertos ?
+    '<p>El tiempo de esos cruces es positivo y usa la pendiente y el viento de cada hora. No es un tiempo de cruce medido ni demuestra que una barrera detenga o deje pasar el incendio; no modeliza pavesas.</p>' : '';
   const errores = [
     sv.elevation_error && 'Perfil: ' + sv.elevation_error,
     sv.wind_error && 'Viento: ' + sv.wind_error,

@@ -1,4 +1,4 @@
-import { agregarVientoHorario, horaBaseUtc } from './rc1-engine.js?v=horario-1';
+import { agregarVientoHorario, horaBaseUtc } from './rc1-engine.js?v=cruce-2';
 
 async function jsonConTimeout(url, options = {}, fetcher = fetch, ms = 12000) {
   const controller = new AbortController();

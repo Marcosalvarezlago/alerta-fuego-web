@@ -52,10 +52,10 @@ export function resolverCombustible({ sigpac, mfe = [], combustiblePositivo = fa
     return { ...base, status: 'nodata', label: 'SIGPAC sin dato', v0: null, rule: 'missing_sigpac' };
   }
   if (codes.every(c => GAP.has(c))) {
-    return { ...base, status: 'gap', label: `discontinuidad ${codes.join(' / ')}`, v0: null,
-      rule: 'sigpac_clear_gap_v1', gap_type: codes.join('/'), conflict: base.conflict || mfes.length > 0 };
+    return { ...base, status: 'gap', label: `cruce incierto ${codes.join(' / ')}`, v0: 8,
+      rule: 'sigpac_uncertain_crossing_v0_8_v2', gap_type: codes.join('/'), conflict: base.conflict || mfes.length > 0 };
   }
-  if (codes.some(c => GAP.has(c))) return { ...base, status: 'nodata', label: 'límite combustible/discontinuidad',
+  if (codes.some(c => GAP.has(c))) return { ...base, status: 'nodata', label: 'límite combustible/cruce incierto',
     v0: null, conflict: true, rule: 'mixed_domain_boundary' };
   const candidates = [];
   const add = (categoria, uso) => candidates.push({ categoria, v0: V0_RC1[categoria], source: 'SIGPAC',

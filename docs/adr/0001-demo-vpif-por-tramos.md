@@ -1,7 +1,7 @@
 # ADR 0001 — Demo VPIF por tramos
 
 **Fecha:** 2026-08-08  
-**Estado actualizado 2026-09-26:** Aceptado; RC1 provisional implementada para compartir como demo experimental. La revisión científica y operativa sigue pendiente.
+**Estado actualizado 2026-09-27:** Aceptado; RC1 provisional implementada como demo experimental. La regla histórica de tiempo cero para AG/CA/ED/ZU queda sustituida por [ADR 0002](0002-cruces-inciertos-eta-rc1.md). La revisión científica y operativa sigue pendiente.
 
 ## Contexto
 
@@ -26,7 +26,7 @@ ETA_s = Σ t_i,s
 El cálculo por tramos está implementado en la demo experimental.
 
 - **Pendiente:** perfil intermedio por tramos, con MDT IGN/PNOA como referencia preferente.
-- **Combustible RC1:** SIGPAC determina el dominio. MFE25 aporta candidatos semánticos solo en FO/PR/MT/PA. FO no equivale a pinar. Las reglas max(V0), no tipificado V0=8 con evidencia y gap t=0 son provisionales para revisión experta. Foto Fija queda fuera de runtime.
+- **Combustible RC1:** SIGPAC determina el dominio. MFE25 aporta candidatos semánticos solo en FO/PR/MT/PA. FO no equivale a pinar. Las reglas max(V0), no tipificado V0=8 con evidencia y gap t=0 (ya sustituido por ADR 0002) son provisionales para revisión experta. Foto Fija queda fuera de runtime.
 - **Controles:** pendiente, viento y combustible ofrecen modos manuales independientes; el combustible manual es homogéneo en el corredor.
 - **Viento:** se mantiene la estructura del modelo de José Antonio. No se añadirá un factor angular nuevo sin validación.
 - **Rothermel:** queda fuera de este lanzamiento y pasa a I+D+i futura, preservando `VPIF-v0` como baseline.

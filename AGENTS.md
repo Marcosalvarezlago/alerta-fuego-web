@@ -53,7 +53,7 @@ Rothermel, ZAFM40, WAF, LFMC, solver 2D, spotting y otras ampliaciones científi
 ## Cuestiones reservadas para revisión con José Antonio
 - Incoherencia documental: matorral `2–5 m/min` frente a `V0 = 6 m/min`.
 - Confirmar si la dirección del viento afecta solo a la clasificación espacial del escenario o también a la velocidad.
-- Revisar max(V0) entre candidatos, V0=8 para combustible positivo no tipificado, t_gap=0, máximo espacial FV y presentación de ETA por sector antes de consolidar v1.0.
+- Revisar max(V0) entre candidatos, V0=8 para combustible positivo no tipificado, cruce incierto V0=8 (ADR 0002), máximo espacial FV y presentación de ETA por sector antes de consolidar v1.0.
 
 ## Calidad
 - Ejecuta `npm test` tras cambios de lógica.

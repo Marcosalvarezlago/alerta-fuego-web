@@ -4,7 +4,7 @@
 
 ## Mapa de combustibles por tramo
 
-- Colorear la línea incendio → zona por clase de combustible, con una leyenda estable para pastos, quercus, matorral, pinar, combustible no tipificado, discontinuidad y NoData.
+- Colorear la línea incendio → zona por clase de combustible, con una leyenda estable para pastos, quercus, matorral, pinar, combustible no tipificado, cruce incierto y NoData.
 - Mostrar al tocar un tramo: distancia acumulada, código SIGPAC, clase, V0, procedencia, confianza y cualquier conflicto.
 - Diferenciar visualmente los valores manuales uniformes de los datos automáticos y evitar que los tramos de 30 m sugieran una precisión cartográfica de 30 m.
 - Mantener legibilidad con mapa base y satélite, en móvil y para personas con dificultad de distinguir colores.

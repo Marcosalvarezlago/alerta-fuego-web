@@ -50,6 +50,7 @@ El alcance previsto de la demo experimental son conatos o incendios en fase inic
 - [Documentación técnica](docs/DOCUMENTACION_TECNICA.md): arquitectura, modelo implementado, fuentes, límites, privacidad, pruebas y despliegue.
 - [Guía para el equipo fundador](docs/GUIA_FUNDADORES.md): explicación no técnica y cuestiones pendientes de validación.
 - [ADR 0001](docs/adr/0001-demo-vpif-por-tramos.md): decisión de mantener VPIF e incorporar cálculo por tramos en la próxima demo.
+- [ADR 0002](docs/adr/0002-cruces-inciertos-eta-rc1.md): corrección del tiempo cero y plan de investigación de cruces.
 - [Política provisional de combustible](docs/RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md): supuestos automáticos y cuestiones para revisión técnica.
 - [Mejora visual futura](docs/ROADMAP_VISUALIZACION_RC1.md): mapa de combustibles, perfil de pendiente y lectura temporal del recorrido.
 - [Diagnóstico de datos automáticos](docs/RC1_FALLOS_PROVEEDORES.md): por qué pueden faltar elevación o viento y cómo se refleja en la ETA.
@@ -94,7 +95,7 @@ La demo global histórica conserva estas correspondencias por ocupación; **no s
 | PA | 3 |
 | FO | 8 |
 
-En RC1, SIGPAC decide primero el dominio: PS→candidato pastos; PR/MT→candidato matorral; PA requiere MFE25 concluyente para tipificar, o queda como combustible no tipificado. MFE25 añade semántica en FO/PR/MT/PA cuando está disponible. Los candidatos múltiples conservan su etiqueta ambigua y usan provisionalmente max(V0). Si hay evidencia positiva de combustible pero no clase fiable (FO sin MFE o cultivo permanente o asociación agrícola), se usa V0=8, marcado como hipótesis conservadora. TA/TH y la ausencia de SIGPAC conservan su marca NoData; el cálculo usa V0=8 como hipótesis prudente y muestra una ETA provisional. Si faltan viento o elevación, usa FV=3 o FP=2 respectivamente, con las mismas advertencias. Ninguno de estos valores es una cota física garantizada. El modo manual permite escoger un combustible uniforme para todo el corredor. [Reglas completas](docs/RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
+En RC1, SIGPAC decide primero el dominio: PS→candidato pastos; PR/MT→candidato matorral; PA requiere MFE25 concluyente para tipificar, o queda como combustible no tipificado. MFE25 añade semántica en FO/PR/MT/PA cuando está disponible. Los candidatos múltiples conservan su etiqueta ambigua y usan provisionalmente max(V0). Si hay evidencia positiva de combustible pero no clase fiable (FO sin MFE o cultivo permanente o asociación agrícola), se usa V0=8, marcado como hipótesis conservadora. Los cruces AG/CA/ED/ZU se calculan con V0=8 como hipótesis provisional y tiempo positivo, sin afirmar que el fuego los atraviese. TA/TH y la ausencia de SIGPAC conservan su marca NoData; el cálculo usa V0=8 como hipótesis prudente y muestra una ETA provisional. Si faltan viento o elevación, usa FV=3 o FP=2 respectivamente, con las mismas advertencias. Ninguno de estos valores es una cota física garantizada. El modo manual permite escoger un combustible uniforme para todo el corredor. [Reglas completas](docs/RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
 
 El resultado muestra una sola ETA. «Cómo se calculó» indica el número de tramos. Los detalles técnicos distinguen entradas manuales, procedencia de cada fuente e hipótesis empleadas. La dirección del cuadrante representa el viento inicial; la ETA integra el viento horario durante el recorrido.
 
@@ -106,7 +107,7 @@ No debe inferirse precisión temática de 30 m por el hecho de muestrear una lí
 
 - El documento original describe el matorral aproximadamente como `2–5 m/min`, pero usa `V0 = 6 m/min`.
 - Confirmar si la dirección del viento afecta únicamente al escenario espacial o también a la velocidad de propagación.
-- Revisar max(V0), cota de combustible positivo no tipificado, t_gap=0, agregación espacial FV y presentación de ETA por sector antes de consolidar v1.0.
+- Revisar max(V0), cota de combustible positivo no tipificado, cruce incierto AG/CA/ED/ZU con V0=8, agregación espacial FV y presentación de ETA por sector antes de consolidar v1.0.
 
 ## Datos externos y privacidad
 

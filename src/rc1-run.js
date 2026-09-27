@@ -1,9 +1,9 @@
 import { unidadesCorredor } from './rc1-overlay.js';
 import { segmentarCorredor } from './rc1-geometry.js';
-import { resolverCombustible } from './rc1-fuel.js?v=combustible-3';
-import { calcularRc1 } from './rc1-engine.js?v=horario-1';
-import { obtenerPerfil, obtenerPronosticoViento } from './rc1-providers.js?v=horario-1';
-import { agregarVientoHorario, horaBaseUtc } from './rc1-engine.js?v=horario-1';
+import { resolverCombustible } from './rc1-fuel.js?v=cruce-2';
+import { calcularRc1 } from './rc1-engine.js?v=cruce-2';
+import { obtenerPerfil, obtenerPronosticoViento } from './rc1-providers.js?v=cruce-2';
+import { agregarVientoHorario, horaBaseUtc } from './rc1-engine.js?v=cruce-2';
 const COMBUSTIBLE_CULTIVO = new Set(['CF', 'CI', 'CS', 'CV', 'FF', 'FL', 'FS', 'FV', 'FY', 'OC', 'OF', 'OV', 'VF', 'VI', 'VO']);
 const DOMINIO_COMBUSTIBLE = new Set(['FO', 'MT', 'PR', 'PA', 'PS', ...COMBUSTIBLE_CULTIVO]);
 

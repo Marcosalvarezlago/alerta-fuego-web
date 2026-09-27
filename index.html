@@ -632,7 +632,7 @@ async function calcular() {
     document.getElementById("btn-datos").textContent = "Datos ▾";
     document.getElementById("resultado").classList.add("abierto");
     if (estado.combAuto) document.getElementById("comb-auto").textContent =
-      `${r.scenarios[0].rows.length} tramos analizados. Abre los detalles técnicos para ver fuentes y reglas.`;
+      "Combustible identificado. Abre «Cómo se calculó» para ver fuentes y reglas.";
   } catch (error) {
     if (controller.signal.aborted) return;
     document.getElementById("resultado").innerHTML =

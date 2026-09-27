@@ -66,7 +66,14 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, PROTOCOLOS, forma
   const filas = resultado.rows.map((row, i) => {
     const periodos = row.wind_periods ?? [];
     const viento = periodos.length ?
-      periodos.map(p => `${horaLocal(p.horaUtc)} · FV ${p.fv}`).join(' → ') : '—';
+      periodos.map(p => {
+        const velocidades = p.wind_points?.map(x => x.velocidadKmh)
+          .filter(Number.isFinite) ?? [];
+        const dato = velocidades.length ?
+          Math.round(Math.max(...velocidades)) + ' km/h' :
+          'sin dato';
+        return `${horaLocal(p.horaUtc)} · ${dato} · FV ${p.fv}${p.sinViento ? ' supuesto' : ''}`;
+      }).join(' → ') : '—';
     const etiqueta = row.label || 'sin dato';
     const codigos = row.sigpac_codes?.join('/') || '—';
     const reglaCombustible = combustibleManual ? 'Selección manual uniforme' :
@@ -88,18 +95,16 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, PROTOCOLOS, forma
     `<div class="metricas"><div class="metrica"><div class="l">Tiempo estimado</div><div class="v">${eta}</div>` +
     `<div class="s">${vientoManual ? 'Viento manual constante durante el recorrido.' : 'Viento horario integrado durante el recorrido.'}</div></div>` +
     `<div class="metrica"><div class="l">Distancia</div><div class="v">${formatearMetros(r.distance_m)}</div>` +
-    '<div class="s">Incendio → zona vulnerable.</div></div>' +
-    `<div class="metrica"><div class="l">Tramos</div><div class="v">${resultado.rows.length}</div>` +
-    '<div class="s">Combustible y pendiente por tramo.</div></div></div>' +
+    '<div class="s">Incendio → zona vulnerable.</div></div></div>' +
     `<details class="bloque" open><summary>${esc(protocolo.encabezado)}</summary>` +
     `<p class="bloque-intro">${esc(protocolo.titulo)}</p><ul>${acciones}</ul></details>` +
     `<details class="bloque"><summary>Cómo se calculó · ${cantidadTramos(resultado.rows.length)}</summary><div class="tec">` +
     `<div class="origenes">${fuentesUsadas}</div>` +
-    `<p>La ETA suma los tiempos de los tramos. ${vientoManual ? 'El viento manual se aplica constante a todo el corredor.' : 'El viento automático cambia al entrar en cada hora del pronóstico, incluso dentro de un tramo.'} El cuadrante del mapa usa la dirección inicial.</p>` +
+    `<p>La ETA suma los tiempos de los tramos. ${vientoManual ? 'El viento manual se aplica constante a todo el corredor.' : 'El viento automático cambia al entrar en cada hora del pronóstico, incluso dentro de un tramo; la velocidad mostrada en km/h es la máxima entre los puntos consultados en esa hora.'} El cuadrante del mapa usa la dirección inicial.</p>` +
     `${aviso}${notaDiscontinuidad}${errores.length ? `<p><b>Incidencias de las fuentes:</b> ${esc(errores.join(' · '))}</p>` : ''}` +
     `<p>Modelo ${esc(r.model_version)}. Velocidad efectiva = distancia del tramo / tiempo integrado; si cambia el viento dentro del tramo, reúne ambos periodos.</p>` +
     `<div class="tramos-wrap"><table class="tramos"><thead><tr><th>Tramo</th><th>Combustible y regla</th>` +
-    '<th>Pendiente</th><th>Viento aplicado</th><th>Velocidad efectiva</th><th>Tiempo</th>' +
+    '<th>Pendiente</th><th>Viento aplicado (km/h)</th><th>Velocidad efectiva</th><th>Tiempo</th>' +
     `</tr></thead><tbody>${filas}</tbody></table></div>` +
     (fuentes.length ? `<p class="fuentes-enlaces">Fuentes: ${fuentes.join(', ')}.</p>` : '') +
     '</div></details>' +
@@ -110,5 +115,5 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, PROTOCOLOS, forma
   resumen.className = area.clase;
   resumen.style.display = 'flex';
   document.getElementById('resumen-texto').textContent =
-    `${area.titulo} · ${eta} · ${formatearMetros(r.distance_m)} · ${cantidadTramos(resultado.rows.length)}`;
+    `${area.titulo} · ${eta} · ${formatearMetros(r.distance_m)}`;
 }

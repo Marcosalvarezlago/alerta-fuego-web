@@ -27,7 +27,8 @@ test('la ETA única muestra los tramos, reserva hipótesis al detalle y etiqueta
     const row = { chainage_start_m: 0, chainage_end_m: 30, label: 'TA · supuesto V0=8',
       sigpac_codes: ['TA'], rule: 'unclassified_domain', v0: 8,
       slope_signed_pct: 0, vpif: 8, t_i_min: 3.75, wind_periods: [
-        { horaUtc: '2026-09-27T10:00', fv: 1.5 }
+        { horaUtc: '2026-09-27T10:00', fv: 1.5,
+          wind_points: [{ velocidadKmh: 12 }, { velocidadKmh: 22 }] }
       ], nodata_flags: { fuel: true, elevation: false, wind: false } };
     const result = { scenarios: [{ eta_min: 180, status: 'provisional',
       exposure: { cuadrante: 'riesgo' }, rows: [row] }],
@@ -40,10 +41,12 @@ test('la ETA única muestra los tramos, reserva hipótesis al detalle y etiqueta
     const visible = html.split('<details class="bloque"><summary>Cómo se calculó')[0];
     assert.match(visible, /Tiempo estimado/);
     assert.match(visible, /<div class="v">3 h/);
-    assert.match(visible, /<div class="l">Tramos/);
+    assert.doesNotMatch(visible, /<div class="l">Tramos/);
     assert.match(visible, /Preparación y seguimiento/);
     assert.doesNotMatch(visible, /Hipótesis provisionales|V0 = 8|prudente|Indeterminada/);
     assert.match(html, /Cómo se calculó · 1 tramo/);
+    assert.ok(html.includes('22 km/h · FV 1.5'));
+    assert.doesNotMatch(elements.get('resumen-texto').textContent, /tramo/);
     assert.match(html, /Hipótesis provisionales/);
     assert.match(html, /1 tramo sin clase de combustible/);
     assert.doesNotMatch(html, /Comparación de viento por horas|Viento \+1 h/);

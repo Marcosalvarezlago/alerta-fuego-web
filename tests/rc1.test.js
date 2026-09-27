@@ -4,7 +4,7 @@ import { segmentarCorredor } from '../src/rc1-geometry.js';
 import { puntoDesdeOrigen } from '../src/core.js';
 import { candidatosMfe, resolverCombustible } from '../src/rc1-fuel.js';
 import { factorPendienteFirmada, pendienteFirmada, agregarVientoHorario,
-  horasEscenario, calcularRc1 } from '../src/rc1-engine.js';
+  horaBaseUtc, calcularRc1 } from '../src/rc1-engine.js';
 
 const a = { lat: 40, lon: -6 };
 function corridor(m, cuts = []) {
@@ -15,7 +15,7 @@ function corridor(m, cuts = []) {
 function wind(v = 0, hour = '2026-09-26T10:00') {
   return agregarVientoHorario([{ horaUtc: hour, velocidadKmh: v, direccionDesdeGrados: 270 }], hour);
 }
-function run(lengths, fuels, zs, ws = [wind(), wind(), wind(), wind()]) {
+function run(lengths, fuels, zs, ws = [wind()], createdAt = "2026-09-26T10:00:00Z") {
   let x = 0;
   const segments = lengths.map((distance_m, i) => {
     const s = { segment_id: `s${i + 1}`, chainage_start_m: x, chainage_end_m: x + distance_m, distance_m };
@@ -23,7 +23,7 @@ function run(lengths, fuels, zs, ws = [wind(), wind(), wind(), wind()]) {
     return s;
   });
   return calcularRc1({ segments, fuels, elevations: zs, winds: ws, inicio: a,
-    fin: { lat: a.lat, lon: a.lon + 0.01 }, created_at: '2026-09-26T10:00:00Z' });
+    fin: { lat: a.lat, lon: a.lon + 0.01 }, created_at: createdAt });
 }
 const sig = (uso) => resolverCombustible({ sigpac: { uso } });
 
@@ -89,7 +89,7 @@ test('23 casos ejecutables del preflight: clases, suma, fronteras y NoData', () 
   assert.equal(run([20], [fuels[1]], [0, 0]).scenarios[0].eta_min, 5);
   assert.deepEqual(corridor(65).segments.map(s => Math.round(s.distance_m)), [30, 30, 5]);
   for (const [speed, expected] of [[10, 2.5], [20, 1.875], [30, 1.25]]) {
-    assert.equal(run([30], [fuels[3]], [0, 0], [wind(speed), wind(speed), wind(speed), wind(speed)])
+    assert.equal(run([30], [fuels[3]], [0, 0], [wind(speed)])
       .scenarios[0].eta_min, expected);
   }
   const sinPerfil = run([30], [fuels[3]], [null, 0]).scenarios[0];
@@ -122,13 +122,13 @@ test('FV 10/20/30, agregación espacial y coherencia horaria', () => {
     { horaUtc: h, velocidadKmh: 22 }], h).fv, 2);
   assert.equal(agregarVientoHorario([{ horaUtc: h, velocidadKmh: 9 },
     { horaUtc: '2026-09-26T11:00', velocidadKmh: 22 }], h).status, 'nodata');
-  assert.equal(horasEscenario(new Date('2026-09-26T10:20:00Z')).length, 4);
+  assert.equal(horaBaseUtc(new Date('2026-09-26T10:20:00Z')), '2026-09-26T10:00');
 });
 
 test('NoData usa los factores más rápidos de la tabla y conserva las banderas', () => {
   const f = sig('PS');
   const noWind = agregarVientoHorario([], '2026-09-26T10:00');
-  const sinViento = run([30], [f], [0, 0], [noWind, wind(), wind(), wind()]).scenarios[0];
+  const sinViento = run([30], [f], [0, 0], [noWind]).scenarios[0];
   assert.equal(sinViento.eta_min, 30 / (3 * 3));
   assert.equal(sinViento.status, 'provisional');
   assert.equal(sinViento.rows[0].nodata_flags.wind, true);
@@ -137,15 +137,27 @@ test('NoData usa los factores más rápidos de la tabla y conserva las banderas'
   assert.equal(sinCombustible.rows[0].v0, 8);
   assert.equal(sinCombustible.rows[0].nodata_flags.fuel, true);
   assert.equal(resolverCombustible({ manual: 'quercus' }).v0, 4);
-  const gap = run([30], [sig('AG')], [0, 0], [noWind, wind(), wind(), wind()]).scenarios[0];
+  const gap = run([30], [sig('AG')], [0, 0], [noWind]).scenarios[0];
   assert.equal(gap.eta_min, 0);
   assert.equal(gap.status, 'provisional');
   const sinElevacion = run([30], [f], [0, null]).scenarios[0];
   assert.equal(sinElevacion.eta_min, 30 / (3 * 2));
   assert.equal(sinElevacion.rows[0].nodata_flags.elevation, true);
-  const w1 = agregarVientoHorario([{ horaUtc: 'h', velocidadKmh: 10, direccionDesdeGrados: 270 }], 'h');
-  const w2 = agregarVientoHorario([{ horaUtc: 'h', velocidadKmh: 10, direccionDesdeGrados: 90 }], 'h');
-  const x = run([30], [f], [0, 0], [w1, w2, w1, w2]).scenarios;
-  assert.equal(x[0].eta_min, x[1].eta_min);
-  assert.notEqual(x[0].exposure.cuadrante, x[1].exposure.cuadrante);
+  const w1 = wind(10);
+  const w2 = agregarVientoHorario([{ horaUtc: '2026-09-26T10:00',
+    velocidadKmh: 10, direccionDesdeGrados: 90 }], '2026-09-26T10:00');
+  const x = run([30], [f], [0, 0], [w1]).scenarios[0];
+  const y = run([30], [f], [0, 0], [w2]).scenarios[0];
+  assert.equal(x.eta_min, y.eta_min);
+  assert.notEqual(x.exposure.cuadrante, y.exposure.cuadrante);
+});
+
+test('el viento cambia dentro de un tramo exactamente al cruzar la hora', () => {
+  const result = run([30], [sig('PS')], [0, 0],
+    [wind(0, '2026-09-26T10:00'), wind(30, '2026-09-26T11:00')],
+    '2026-09-26T10:59:00Z').scenarios[0];
+  assert.ok(Math.abs(result.eta_min - 4) < 1e-7);
+  assert.deepEqual(result.rows[0].wind_periods.map(p => Math.round(p.distancia_m)), [3, 27]);
+  assert.deepEqual(result.wind_hours_used, ['2026-09-26T10:00', '2026-09-26T11:00']);
+  assert.equal(result.rows[0].end_at_utc, '2026-09-26T11:03:00.000Z');
 });

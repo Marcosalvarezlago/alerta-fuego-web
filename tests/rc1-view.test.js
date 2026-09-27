@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pintarResultadoRc1 } from '../src/rc1-view.js';
 
-test('la vista muestra ETA provisional y evita vigilancia verde con datos ausentes', () => {
+test('la ETA única muestra los tramos, reserva hipótesis al detalle y etiqueta entradas manuales', () => {
   const elements = new Map();
   const previous = globalThis.document;
   globalThis.document = { getElementById(id) {
@@ -10,37 +10,55 @@ test('la vista muestra ETA provisional y evita vigilancia verde con datos ausent
       style: {}, textContent: '' });
     return elements.get(id);
   } };
+  const context = {
+    Core: { escaparHtml: x => String(x), formatearTiempo: () => '3 h',
+      clasificarEscenario: () => 'vigilancia_preventiva' },
+    TEXTO_CUADRANTE: { riesgo: { clase: 'riesgo', etiqueta: 'Viento inicial',
+      titulo: 'Exposición principal', desc: 'Prueba' } },
+    PROTOCOLOS: {
+      provisional: { encabezado: 'Preparación y seguimiento',
+        titulo: 'Sigue las indicaciones oficiales.', acciones: ['Prepara una salida.'] },
+      vigilancia_preventiva: { encabezado: 'Seguimiento',
+        titulo: 'Sigue la evolución.', acciones: ['Consulta fuentes oficiales.'] }
+    },
+    formatearMetros: () => '30 m'
+  };
   try {
-    const row = { chainage_start_m: 0, chainage_end_m: 30, label: 'TA · supuesto prudente',
+    const row = { chainage_start_m: 0, chainage_end_m: 30, label: 'TA · supuesto V0=8',
       sigpac_codes: ['TA'], rule: 'unclassified_domain', v0: 8,
-      slope_signed_pct: 0, vpif: 8, t_i_min: 3.75,
-      nodata_flags: { fuel: true, elevation: false, wind: false } };
+      slope_signed_pct: 0, vpif: 8, t_i_min: 3.75, wind_periods: [
+        { horaUtc: '2026-09-27T10:00', fv: 1.5 }
+      ], nodata_flags: { fuel: true, elevation: false, wind: false } };
     const result = { scenarios: [{ eta_min: 180, status: 'provisional',
-      scenario: 't0', horaUtc: '2026-09-27T10:00',
       exposure: { cuadrante: 'riesgo' }, rows: [row] }],
       source_versions: { fuel_source: 'SIGPAC parcial', mfe_count: 0,
-        wind_source: 'Open-Meteo forecast 10m' },
-      profile_source: 'IGN MDT05 WCS', model_version: 'vpif-rc1-provisional-2',
+        wind_source: 'Open-Meteo pronóstico horario 10 m' },
+      profile_source: 'IGN MDT05 WCS', model_version: 'vpif-rc1-horario-1',
       distance_m: 30 };
-    pintarResultadoRc1(result, {
-      Core: { escaparHtml: x => String(x), formatearTiempo: () => '3 h',
-        clasificarEscenario: () => 'vigilancia_preventiva' },
-      TEXTO_CUADRANTE: { riesgo: { clase: 'riesgo', etiqueta: 'Exposición principal',
-        titulo: 'Cuadrante de riesgo', desc: 'Prueba' } },
-      NOMBRE_CUADRANTE: { riesgo: 'riesgo' },
-      PROTOCOLOS: { provisional: { encabezado: '⚠️ Preparación con datos incompletos',
-        titulo: 'ETA PROVISIONAL', acciones: ['No aplaces decisiones.'] } },
-      formatearMetros: () => '30 m'
-    });
+    pintarResultadoRc1(result, context);
     const html = elements.get('resultado').innerHTML;
-    assert.match(html, /3 h · prudente/);
-    assert.match(html, /ETA PROVISIONAL/);
-    assert.match(html, /V0 = 8, FV = 3 o FP = 2/);
-    assert.match(html, /SIGPAC parcial/);
-    assert.match(html, /Comparación de viento por horas/);
-    assert.match(html, /Viento de referencia/);
-    assert.doesNotMatch(html, /2026-09-27T10:00/);
-    assert.doesNotMatch(html, /VIGILANCIA PREVENTIVA/);
+    const visible = html.split('<details class="bloque"><summary>Cómo se calculó')[0];
+    assert.match(visible, /Tiempo estimado/);
+    assert.match(visible, /<div class="v">3 h/);
+    assert.match(visible, /<div class="l">Tramos/);
+    assert.match(visible, /Preparación y seguimiento/);
+    assert.doesNotMatch(visible, /Hipótesis provisionales|V0 = 8|prudente|Indeterminada/);
+    assert.match(html, /Cómo se calculó · 1 tramo/);
+    assert.match(html, /Hipótesis provisionales/);
+    assert.match(html, /1 tramo sin clase de combustible/);
+    assert.doesNotMatch(html, /Comparación de viento por horas|Viento \+1 h/);
+
+    result.scenarios[0].status = 'ok';
+    result.scenarios[0].rows[0].nodata_flags.fuel = false;
+    result.source_versions = { fuel_source: 'combustible manual homogéneo',
+      fuel_mode: 'manual', slope_mode: 'manual', wind_mode: 'manual',
+      wind_source: 'viento manual homogéneo' };
+    result.profile_source = 'pendiente manual homogénea';
+    pintarResultadoRc1(result, context);
+    const manual = elements.get('resultado').innerHTML;
+    assert.match(manual, /Combustible:<\/b> <span class="origen-manual">Manual/);
+    assert.match(manual, /Pendiente:<\/b> <span class="origen-manual">Manual/);
+    assert.match(manual, /Viento:<\/b> <span class="origen-manual">Manual/);
   } finally {
     globalThis.document = previous;
   }

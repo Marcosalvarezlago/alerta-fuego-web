@@ -1,9 +1,9 @@
 import { unidadesCorredor } from './rc1-overlay.js';
 import { segmentarCorredor } from './rc1-geometry.js';
 import { resolverCombustible } from './rc1-fuel.js?v=combustible-3';
-import { calcularRc1 } from './rc1-engine.js?v=prudente-1';
-import { obtenerPerfil, obtenerEscenariosViento } from './rc1-providers.js?v=prudente-1';
-import { agregarVientoHorario, horasEscenario } from './rc1-engine.js?v=prudente-1';
+import { calcularRc1 } from './rc1-engine.js?v=horario-1';
+import { obtenerPerfil, obtenerPronosticoViento } from './rc1-providers.js?v=horario-1';
+import { agregarVientoHorario, horaBaseUtc } from './rc1-engine.js?v=horario-1';
 const COMBUSTIBLE_CULTIVO = new Set(['CF', 'CI', 'CS', 'CV', 'FF', 'FL', 'FS', 'FV', 'FY', 'OC', 'OF', 'OV', 'VF', 'VI', 'VO']);
 const DOMINIO_COMBUSTIBLE = new Set(['FO', 'MT', 'PR', 'PA', 'PS', ...COMBUSTIBLE_CULTIVO]);
 
@@ -189,27 +189,36 @@ export async function ejecutarRc1(inicio, fin, asset, {
       })
     : Promise.resolve({ elevations: elevacionesPendienteManual(overlay.segments, pendienteManual),
       source: 'pendiente manual homogénea', fallback: 'manual_slope' });
+  let windError = null;
   const windTask = vientoManual === null
-    ? obtenerEscenariosViento(inicio, fin, overlay.distance_m, { signal, fetcher, now })
+    ? obtenerPronosticoViento(inicio, fin, overlay.distance_m, { signal, fetcher, now })
       .catch(error => {
         if (signal?.aborted) throw error;
-        return horasEscenario(now).map(hora => agregarVientoHorario([], hora));
+        windError = error.message || String(error);
+        return [agregarVientoHorario([], horaBaseUtc(now))];
       })
-    : Promise.resolve(horasEscenario(now).map(hora => agregarVientoHorario([
-      { lat: inicio.lat, lon: inicio.lon, horaUtc: hora,
+    : Promise.resolve([{ ...agregarVientoHorario([
+      { lat: inicio.lat, lon: inicio.lon, horaUtc: horaBaseUtc(now),
         velocidadKmh: vientoManual.velocidadKmh,
         direccionDesdeGrados: (vientoManual.haciaGrados + 180) % 360 }
-    ], hora)));
+    ], horaBaseUtc(now)), manual: true }]);
   const [profile, winds] = await Promise.all([profileTask, windTask]);
   if (signal?.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
   const output = calcularRc1({ segments: overlay.segments, fuels,
     elevations: profile.elevations, winds, inicio, fin, asset_id: asset.asset_id,
     source_versions: { ...asset.manifest, elevation_source: profile.source,
-      elevation_fallback: profile.fallback,
+      elevation_fallback: profile.fallback, elevation_error: profile.source_error ?? null,
+      wind_error: windError,
+      fuel_mode: manual ? 'manual' : 'automatico',
+      slope_mode: pendienteManual === null ? 'automatico' : 'manual',
+      wind_mode: vientoManual === null ? 'automatico' : 'manual',
       wind_source: vientoManual ? 'viento manual homogéneo' :
-        winds.some(w => w.status !== 'ok') ? 'Open-Meteo parcial o no disponible; FV = 3 prudente' :
-          'Open-Meteo forecast 10m' },
+        winds.some(w => w.status !== 'ok') ? 'Open-Meteo parcial o no disponible' :
+          'Open-Meteo pronóstico horario 10 m' },
     created_at: now.toISOString() });
+  if (output.scenarios[0].rows.some(row => row.nodata_flags.wind) && !vientoManual) {
+    output.source_versions.wind_source = 'Open-Meteo parcial o fuera del horizonte; FV = 3 en horas sin dato';
+  }
   return { ...output, profile_source: profile.source, profile_fallback: profile.fallback,
     intervals: overlay.intervals.map(i => ({ from_m: i.from_m, to_m: i.to_m,
       sigpac_ids: i.sigpac.map(f => f.id), mfe_ids: i.mfe.map(f => f.id) })) };

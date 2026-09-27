@@ -1,6 +1,6 @@
 # Validación de la próxima demo MVP
 
-**Estado 2026-09-26:** RC1 provisional preparada como demo pública experimental. Su publicación no acredita validación científica u operativa.
+**Estado 2026-09-27:** RC1 provisional preparada como demo pública experimental. Su publicación no acredita validación científica u operativa.
 
 Este documento define las puertas mínimas antes de presentar la siguiente versión de Alerta Fuego como demo pública coherente. No sustituye pruebas científicas ni operativas.
 
@@ -55,8 +55,8 @@ Tras implementación:
 
 ## 6. Gate de pruebas
 
-- [ ] `npm test` pasa íntegramente.
-- [ ] Añadir tests para segmentación, suma temporal y fronteras nuevas.
+- [x] `npm test` pasa íntegramente (39 pruebas, 2026-09-27).
+- [x] Pruebas de segmentación, suma temporal, cambio de hora y fronteras RC1.
 - [ ] Casos de regresión del modelo actual siguen siendo reproducibles cuando proceda.
 - [ ] Pruebas de integración en navegador cubren estado automático/manual e invalidación.
 - [ ] Smoke tests con proveedores reales realizados separadamente de la suite unitaria.

@@ -16,10 +16,10 @@
 - Marcar huecos del MDT y el proveedor de respaldo; no dibujar un terreno llano cuando falta elevación.
 - En modo manual, mostrar una recta esquemática y etiquetarla como hipótesis homogénea.
 
-## Escenarios y calidad de datos
+## Evolución temporal y calidad de datos
 
-- Permitir comparar t0, +1 h, +2 h y +3 h sobre la misma visualización sin confundir hora de pronóstico con tiempo hasta llegada.
+- Dibujar el tiempo acumulado a lo largo del corredor y señalar en qué punto cambia la hora del pronóstico aplicada.
 - Mostrar qué tramos dominan la ETA y cuáles usan supuestos provisionales o NoData.
 - Mantener al alcance los protocolos y el recordatorio de emergencia; el gráfico nunca debe ocultar incertidumbre ni hacer parecer exacta la ETA.
 
-**Criterio de entrega futuro:** revisar un prototipo en escritorio y móvil, validar accesibilidad y comparar las visualizaciones con la tabla de tramos y los cuatro escenarios calculados.
+**Criterio de entrega futuro:** revisar un prototipo en escritorio y móvil, validar accesibilidad y comparar las visualizaciones con la tabla de tramos y la ETA integrada calculada.

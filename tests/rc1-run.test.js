@@ -23,12 +23,12 @@ function mockFetch(url) {
   throw new Error(`URL inesperada: ${url}`);
 }
 
-test('orquestación RC1 integra geometría, combustible, perfil y cuatro horas', async () => {
+test('orquestación RC1 integra geometría, combustible, perfil y viento horario', async () => {
   const result = await ejecutarRc1(inicio, fin, asset,
     { permitirFallbackOpenMeteo: true, fetcher: mockFetch, now });
-  assert.equal(result.scenarios.length, 4);
+  assert.equal(result.scenarios.length, 1);
   assert.equal(result.profile_fallback, 'open_meteo_elevation_explicit');
-  assert.deepEqual(result.scenarios.map(s => s.fv), [1.5, 2, 3, 1]);
+  assert.deepEqual(result.scenarios[0].wind_hours_used, [hours[0]]);
   const length = calcularDistanciaM(0, 0, 0, 0.0003);
   assert.ok(Math.abs(result.scenarios[0].eta_min - length / 4.5) < 1e-9);
   assert.equal(result.scenarios[0].rows.reduce((sum, r) => sum + r.distance_m, 0), result.distance_m);
@@ -128,9 +128,11 @@ test('corredor de más de 5 km divide asset y perfil sin bloquear el cálculo', 
     }
     if (String(url).includes('/v1/forecast')) {
       const count = new URL(url).searchParams.get('latitude').split(',').length;
+      const longHours = Array.from({ length: 48 }, (_, i) =>
+        new Date(now.getTime() - 600000 + i * 3600000).toISOString().slice(0, 16));
       return { ok: true, json: async () => Array.from({ length: count }, () => ({
-        hourly: { time: hours, wind_speed_10m: [10, 20, 30, 0],
-          wind_direction_10m: [270, 270, 270, 270] }
+        hourly: { time: longHours, wind_speed_10m: Array(48).fill(10),
+          wind_direction_10m: Array(48).fill(270) }
       })) };
     }
     throw new Error('Consulta inesperada: ' + url);
@@ -156,7 +158,7 @@ test('fallos de proveedores conservan ETA provisional y procedencia', async () =
   assert.equal(result.scenarios[0].rows[0].nodata_flags.elevation, true);
   assert.equal(result.scenarios[0].rows[0].nodata_flags.wind, true);
   assert.equal(result.profile_fallback, 'prudential_fp_2');
-  assert.match(result.source_versions.wind_source, /prudente/);
+  assert.match(result.source_versions.wind_source, /FV = 3/);
 });
 
 test('si SIGPAC falla se informa del dato ausente y se calcula ETA prudente', async () => {

@@ -1,4 +1,4 @@
-import { agregarVientoHorario, horasEscenario } from './rc1-engine.js?v=prudente-1';
+import { agregarVientoHorario, horaBaseUtc } from './rc1-engine.js?v=horario-1';
 
 async function jsonConTimeout(url, options = {}, fetcher = fetch, ms = 12000) {
   const controller = new AbortController();
@@ -96,16 +96,19 @@ export function puntosViento(inicio, fin, distanceM) {
   }));
 }
 
-export async function obtenerEscenariosViento(inicio, fin, distanceM,
+export async function obtenerPronosticoViento(inicio, fin, distanceM,
   { signal, fetcher = fetch, now = new Date() } = {}) {
   const points = puntosViento(inicio, fin, distanceM);
   const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + points.map(p => p.lat).join(',') +
     '&longitude=' + points.map(p => p.lon).join(',') +
-    '&hourly=wind_speed_10m,wind_direction_10m&forecast_days=2&timezone=UTC&wind_speed_unit=kmh';
+    '&hourly=wind_speed_10m,wind_direction_10m&forecast_days=7&timezone=UTC&wind_speed_unit=kmh';
   const response = await jsonConTimeout(url, { signal }, fetcher);
   const forecasts = Array.isArray(response) ? response : [response];
   if (forecasts.length !== points.length) throw new Error('Open-Meteo: número de puntos incoherente');
-  return horasEscenario(now).map(hour => {
+  const base = horaBaseUtc(now);
+  const horas = forecasts[0]?.hourly?.time?.filter(hour => hour >= base) ?? [];
+  if (!horas.length) throw new Error('Open-Meteo: pronóstico horario vacío');
+  return horas.map(hour => {
     const observations = forecasts.map((f, i) => {
       const index = f.hourly?.time?.indexOf(hour);
       return { lat: points[i].lat, lon: points[i].lon, horaUtc: hour,

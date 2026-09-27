@@ -51,7 +51,8 @@ El alcance previsto de la demo experimental son conatos o incendios en fase inic
 - [Guía para el equipo fundador](docs/GUIA_FUNDADORES.md): explicación no técnica y cuestiones pendientes de validación.
 - [ADR 0001](docs/adr/0001-demo-vpif-por-tramos.md): decisión de mantener VPIF e incorporar cálculo por tramos en la próxima demo.
 - [Política provisional de combustible](docs/RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md): supuestos automáticos y cuestiones para revisión técnica.
-- [Mejora visual futura](docs/ROADMAP_VISUALIZACION_RC1.md): mapa de combustibles, perfil de pendiente y comparación de escenarios.
+- [Mejora visual futura](docs/ROADMAP_VISUALIZACION_RC1.md): mapa de combustibles, perfil de pendiente y lectura temporal del recorrido.
+- [Diagnóstico de datos automáticos](docs/RC1_FALLOS_PROVEEDORES.md): por qué pueden faltar elevación o viento y cómo se refleja en la ETA.
 - [Validación MVP](docs/VALIDACION_MVP.md): puertas mínimas antes de presentar la siguiente versión como demo pública coherente.
 
 ## Modelo actual implementado
@@ -68,17 +69,15 @@ La misma interfaz RC1 se sirve en local y en GitHub Pages. El cálculo público 
 La RC1 mantiene el modelo VPIF del proyecto y lo aplica **por tramos**:
 
 ```text
-VPIF_i,s = V0_i · FV_s · FP_i
-
-t_i,s = d_i / VPIF_i,s
-
-ETA_s = Σ t_i,s
+VPIF_i,h = V0_i · FV_h · FP_i
+tiempo parcial = distancia recorrida con VPIF_i,h / VPIF_i,h
+ETA = suma de tiempos parciales hasta la zona
 ```
 
 Decisiones de diseño ya adoptadas:
 
 - pendiente por tramos sobre el perfil foco → zona vulnerable;
-- cálculo acumulativo de tiempos parciales;
+- cálculo acumulativo de tiempos parciales, cambiando FV al cruzar cada hora prevista;
 - Rothermel queda fuera de este lanzamiento y pasa a I+D+i futura;
 - las decisiones científicas de la implementación siguen siendo provisionales.
 
@@ -96,6 +95,8 @@ La demo global histórica conserva estas correspondencias por ocupación; **no s
 | FO | 8 |
 
 En RC1, SIGPAC decide primero el dominio: PS→candidato pastos; PR/MT→candidato matorral; PA requiere MFE25 concluyente para tipificar, o queda como combustible no tipificado. MFE25 añade semántica en FO/PR/MT/PA cuando está disponible. Los candidatos múltiples conservan su etiqueta ambigua y usan provisionalmente max(V0). Si hay evidencia positiva de combustible pero no clase fiable (FO sin MFE o cultivo permanente o asociación agrícola), se usa V0=8, marcado como hipótesis conservadora. TA/TH y la ausencia de SIGPAC conservan su marca NoData; el cálculo usa V0=8 como hipótesis prudente y muestra una ETA provisional. Si faltan viento o elevación, usa FV=3 o FP=2 respectivamente, con las mismas advertencias. Ninguno de estos valores es una cota física garantizada. El modo manual permite escoger un combustible uniforme para todo el corredor. [Reglas completas](docs/RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
+
+El resultado muestra una sola ETA y el número de tramos. Los detalles técnicos distinguen entradas manuales, procedencia de cada fuente e hipótesis empleadas. La dirección del cuadrante representa el viento inicial; la ETA integra el viento horario durante el recorrido.
 
 La persona puede elegir corredores de más de 5 km: la aplicación divide automáticamente las consultas SIGPAC y el perfil en lotes pequeños. Una distancia larga aumenta la dependencia de fuentes externas y no amplía el alcance científico de esta demo para fases iniciales.
 

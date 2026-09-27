@@ -1,152 +1,34 @@
-# Alerta Fuego — Guía para el equipo fundador
+# Alerta Fuego — guía para el equipo fundador
 
-*La RC1 por tramos es la interfaz actual de `index.html`, en local y en la web pública. Sigue siendo una demo experimental, sin validación como herramienta fiable de emergencia. Los apartados anteriores a “RC1 por tramos” describen la versión global histórica.*
+## Qué ofrece la RC1
 
----
+La web estima de forma orientativa el tiempo que tardaría un frente dominante en recorrer la línea entre un incendio y una zona vulnerable. Está pensada para estudiar conatos o fases iniciales; no predice pavesas, fuego de copas, frentes múltiples ni una propagación espacial completa. No sustituye al 112 ni a los servicios competentes, y la ETA nunca debe usarse para apurar una salida.
 
-## Qué es Alerta Fuego
+La RC1 conserva el mapa, los marcadores, la entrada de coordenadas o enlaces de Google Maps, la geolocalización, los cuadrantes y los protocolos. Divide el corredor en tramos de hasta 30 m de integración, separados también por cambios de combustible. Esos 30 m no representan la precisión del mapa de vegetación.
 
-Alerta Fuego es una aplicación web que hace una estimación orientativa del tiempo que tardaría un frente de incendio en recorrer la distancia entre un punto de incendio y una zona vulnerable.
+## Cómo usarla
 
-El cálculo combina cuatro datos:
+1. Marca el incendio y la zona vulnerable en el mapa o introduce sus coordenadas.
+2. Abre «Datos» si quieres revisar las fuentes o activar un modo manual de pendiente, viento o combustible.
+3. Pulsa «Calcular alerta».
+4. Lee la ETA única, la distancia, el número de tramos y el protocolo. Abre «Cómo se calculó» para examinar fuentes, reglas e hipótesis por tramo.
 
-- la distancia;
-- el tipo de combustible o vegetación dominante;
-- la velocidad y dirección del viento;
-- la pendiente y el sentido en que avanza el fuego.
+El viento automático procede de un pronóstico horario de Open-Meteo. El cálculo aplica la hora prevista al llegar a cada posición, incluso si cambia en medio de un tramo. El cuadrante del mapa solo describe la dirección inicial, no todas las direcciones futuras. En modo manual, la dirección y la velocidad elegidas se aplican de manera uniforme.
 
-La fórmula implementada es la que se venía usando en el proyecto: velocidad base del combustible multiplicada por los factores de viento y pendiente; después, distancia dividida por esa velocidad.
+La pendiente automática sale del perfil IGN MDT05 a lo largo del recorrido, con respaldo Open-Meteo Elevation si falla la consulta completa. El control manual va de −100 % a +100 %: valor negativo para descenso hacia la zona, cero para llano y positivo para ascenso. Se aplica uniformemente.
 
-El documento original del grupo debe conservarse junto al proyecto para poder comprobar de forma independiente las tablas y los textos de actuación. La demo por sí sola no demuestra que el modelo haya sido validado por especialistas.
+El combustible automático se obtiene por tramo de SIGPAC; el servidor local puede añadir MFE25 cuando dispone de la fuente. La página pública todavía no distribuye MFE25 y no permite seleccionar un fichero: usa SIGPAC y sus reglas provisionales. El control manual permite elegir una clase uniforme para todo el corredor sin sugerencia puntual basada en el foco. [Política de combustible](RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
 
----
+## Cómo interpretar los resultados
 
-## Qué NO es
+La ETA suma los tiempos calculados para los tramos. En la tabla técnica se identifican los datos manuales y los tramos en los que falta un valor automático. Cuando falta clase de combustible, viento o elevación, el programa mantiene una ETA provisional con V0=8, FV=3 o FP=2, respectivamente. Son los valores más rápidos de la tabla VPIF actual y no constituyen una cota garantizada para un incendio real. Una discontinuidad inequívoca usa tiempo cero por convención; esto no demuestra que el fuego la atraviese instantáneamente ni que lo detenga.
 
-- **No predice la evolución real de un incendio.** Simplifica un fenómeno que cambia continuamente.
-- **No sustituye al 112, INFOEX, bomberos, Protección Civil ni a ninguna autoridad.**
-- **No sirve para apurar una salida ni para justificar quedarse.**
-- **No es una validación profesional del terreno, del combustible ni del viento.**
-- **No está validada para cualquier país.** IGN y SIGPAC aportan datos para el ámbito español.
+El resultado muestra un protocolo vinculado al tiempo estimado. El color o cuadrante de viento inicial no reduce su urgencia. Ante un peligro real, hay que seguir las indicaciones oficiales aunque contradigan la web.
 
-Ante peligro real, llama al 112 y sigue las instrucciones oficiales aunque contradigan la estimación de la aplicación.
+## Datos externos y límites
 
----
+La aplicación comunica coordenadas a Open-Meteo para viento y, si hace falta, elevación; al servidor local o Worker e IGN para perfil; y al servidor local o Worker y SIGPAC para recintos y usos. Al resolver enlaces cortos de Google Maps intervienen el Worker y Google. No tiene cuentas ni base de datos propia, pero esos proveedores pueden registrar solicitudes.
 
-## Cómo se usa la demo
+Las peticiones automáticas pueden fallar por red, tiempo de espera, respuesta inválida, celdas sin elevación o fin del horizonte del pronóstico. El programa registra la incidencia y el supuesto empleado en «Cómo se calculó». [Diagnóstico de fuentes](RC1_FALLOS_PROVEEDORES.md).
 
-1. Se abre la web en móvil u ordenador.
-2. Se marca el punto del incendio en el mapa.
-3. Se marca la zona que se quiere proteger.
-4. Se revisan o introducen pendiente, viento y combustible.
-5. Se pulsa **Calcular alerta**.
-
-Los puntos también pueden fijarse con coordenadas, algunos enlaces de Google Maps o, para la zona vulnerable, con «Mi ubicación».
-
-La aplicación no debería calcular mientras falte un dato necesario. Usar un dato automático no elimina la obligación de comprobar si tiene sentido con lo que se ve y se conoce del terreno.
-
----
-
-## Qué muestra el resultado
-
-- **Rojo — riesgo:** la zona queda en la dirección principal usada para el viento.
-- **Amarillo — alerta lateral:** un cambio de dirección puede llevar el frente hacia la zona.
-- **Fuera del sector principal según el viento considerado:** no significa que la zona sea segura; el viento y el incendio pueden cambiar.
-- Distancia entre los dos puntos.
-- Velocidad de propagación calculada por el modelo.
-- Tiempo estimado y escenario temporal.
-- Recomendaciones asociadas al escenario.
-
-Los textos de actuación también deben revisarse con el equipo fundador y con criterio competente en emergencias. Que estén incorporados en la app no los convierte por sí solo en instrucciones oficiales.
-
----
-
-## Los datos automáticos y sus límites
-
-### Viento
-
-Open-Meteo ofrece una estimación de modelo meteorológico en el punto del incendio. No es un anemómetro colocado allí ni una observación directa. La aplicación convierte la dirección meteorológica «desde» en la dirección «hacia» la que empujaría el frente y conserva temporalmente la consulta.
-
-Si el viento automático no está disponible o ha caducado, hay que reintentar o volver al modo manual. El cálculo no debe continuar usando un viento automático antiguo como si fuera actual.
-
-### Pendiente
-
-La aplicación obtiene la elevación del incendio y de la zona mediante IGN; si no puede, intenta Open-Meteo. Con esos dos extremos calcula una pendiente media sencilla.
-
-Esto no dibuja el perfil completo entre ambos puntos. Un barranco, una cresta o varios cambios de ladera pueden quedar ocultos. Por eso la pendiente automática es provisional y la interfaz debe indicar la fuente utilizada.
-
-Si esta consulta falla, hay que reintentar o elegir la pendiente manualmente.
-
-### Combustible y SIGPAC
-
-SIGPAC informa de la ocupación oficial del suelo en el punto del incendio. No sabe necesariamente qué especie hay, cuánta biomasa existe, si está seca ni cómo continúa la vegetación hasta la zona protegida.
-
-Por prudencia, SIGPAC **solo sugiere**. La persona debe confirmar el combustible, y una consulta fallida no impide elegirlo manualmente.
-
-La demo global histórica conserva este criterio; la RC1 usa una arquitectura distinta:
-
-| Ocupación SIGPAC | Velocidad base propuesta |
-|---|---:|
-| PS — pastizal | 3 m/min |
-| PR o MT — pasto arbustivo/matorral | 6 m/min |
-| PA — pasto con arbolado | 3 m/min |
-| FO — forestal | 8 m/min en la demo histórica; sin V0 directo en RC1 |
-
-Es una clasificación conservadora por ocupación, no una identificación botánica. Los usos sin correspondencia acordada deben elegirse manualmente. Al mover el punto del incendio hay que repetir la consulta; una sugerencia pertenece al punto en el que se obtuvo.
-
----
-
-## Qué pasa si falla internet o una fuente
-
-- Si falla **viento** o **pendiente** mientras están en automático, el cálculo queda bloqueado hasta reintentar o pasar a manual.
-- Si falla **SIGPAC**, se mantiene la elección manual de combustible porque su consulta es orientativa.
-- Las teselas del mapa, IGN, SIGPAC, Open-Meteo, Google Maps y el Worker son servicios externos. Su disponibilidad no depende solo del proyecto.
-
-No debe confundirse «el servicio respondió una vez» con «el servicio está garantizado».
-
----
-
-## Privacidad: qué datos salen del dispositivo
-
-Al usar funciones automáticas se envían coordenadas a servicios externos:
-
-- el incendio a Open-Meteo para consultar viento;
-- incendio y zona a IGN, al Worker o a Open-Meteo para calcular elevaciones;
-- el incendio a SIGPAC para consultar ocupación;
-- un enlace corto al Worker y a Google para resolverlo.
-
-La aplicación no tiene cuentas ni una base de datos propia, pero los proveedores y alojamientos pueden generar registros conforme a sus políticas. Conviene no introducir ubicaciones sensibles sin conocer este flujo.
-
----
-
-## En qué punto está realmente el proyecto
-
-- Existe una demo web estática que permite recorrer el flujo completo.
-- El cálculo básico, el mapa y las consultas externas están implementados.
-- La correspondencia SIGPAC se ha revisado con José y la demo refleja la tabla de esta guía.
-- La aplicación incorpora pruebas unitarias reproducibles, pero sigue necesitando comprobación visual y con servicios reales, revisión de fuentes y licencias, trazabilidad del documento original y validación operativa independiente.
-- La publicación web y el Worker son despliegues separados; el Worker requiere control de versión para evitar diferencias entre el repositorio y lo que está activo.
-
-La pregunta de esta fase no es solo «¿funciona la pantalla?», sino también:
-
-- ¿El modelo y sus fronteras coinciden con lo acordado?
-- ¿Los textos de actuación son correctos y prudentes?
-- ¿Las sugerencias SIGPAC tienen sentido en los casos conocidos?
-- ¿Qué errores deben impedir presentar un resultado?
-- ¿Qué nivel de validación hace falta antes de ampliar su uso?
-
----
-
-## RC1 por tramos: demo provisional
-
-El uso previsto para esta demo experimental se limita a conatos o incendios en fase inicial con un frente dominante. No modeliza múltiples frentes, pavesas, fuego de copas ni dinámica espacial compleja.
-
-La web conserva mapa, marcadores, editor de coordenadas, geolocalización, cuadrantes y protocolos de la versión anterior. Acepta corredores superiores a 5 km dividiendo internamente las consultas; el alcance científico sigue limitado a conatos o fases iniciales. Al pulsar “Calcular alerta”, `index.html` recorre un corredor 1D, corta sus fronteras SIGPAC y MFE25 cuando está disponible, integra segmentos de hasta 30 m, usa pendiente firmada de perfil y cuatro escenarios horarios de viento. Cada tramo aporta su tiempo a la ETA. Los 30 m son separación de integración, no precisión del mapa de combustible.
-
-El combustible automático usa SIGPAC; en local puede añadir MFE25 si está instalado, mientras que la web pública no lo distribuye. No hay que elegir un fichero ni escribir la URL de un Worker. También pueden elegirse por separado pendiente, viento y combustible manuales. La pendiente manual usa una escala firmada: negativo al descender, 0 llano y positivo al ascender hacia la zona. Un FO sin clase MFE no se convierte en pinar: recibe provisionalmente V0=8 con etiqueta de “combustible no tipificado”. Pasto con arbolado sin MFE25 concluyente y los cultivos permanentes reciben la misma hipótesis prudente. La selección manual de combustible no ofrece sugerencia puntual SIGPAC. Si faltan datos, la web muestra una ETA provisional usando los factores más rápidos de la tabla VPIF en los tramos afectados (V0=8, FV=3 o FP=2) y señala qué se supuso. No es un límite garantizado para un incendio real. Las discontinuidades inequívocas se registran con tiempo cero como convención de cálculo: **no significa que el fuego atraviese una barrera instantáneamente**. Puede usarse Open-Meteo Elevation como respaldo visible si el MDT05 no responde. [Reglas provisionales](RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
-
-Siguen pendientes de revisión técnica max(V0) en mezclas, V0=8 para combustible positivo no tipificado, t_gap=0, viento espacial prudencial, presentación de ETA por sector y la discrepancia histórica del matorral 2–5 frente a 6 m/min. Ninguna ETA debe interpretarse como tiempo seguro.
-
----
-
-*Alerta Fuego es una ayuda de anticipación en desarrollo. Ante cualquier emergencia real, llama al 112 y sigue las indicaciones de los servicios competentes.*
+La RC1 pública es una demo experimental sin validación predictiva u operativa. Siguen abiertas la discrepancia histórica de matorral (intervalo 2–5 frente a V0=6 m/min), la regla para mezclas de combustible, las discontinuidades y el papel de la dirección del viento en la velocidad. [Validaciones pendientes](VALIDACION_MVP.md) y [documentación técnica](DOCUMENTACION_TECNICA.md).

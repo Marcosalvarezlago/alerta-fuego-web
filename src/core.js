@@ -12,22 +12,6 @@ export const V0_COMBUSTIBLE = Object.freeze({
   pinar: 8
 });
 
-// Equivalencias operativas SIGPAC confirmadas por José Antonio.
-// TA queda deliberadamente fuera: no tiene asociación confirmada.
-export const SUGERENCIA_COMBUSTIBLE_SIGPAC = Object.freeze({
-  PS: Object.freeze({ valor: "pastos_bajos", aviso: null }),
-  PR: Object.freeze({ valor: "matorral_mediterraneo", aviso: null }),
-  MT: Object.freeze({ valor: "matorral_mediterraneo", aviso: null }),
-  PA: Object.freeze({
-    valor: "pastos_bajos",
-    aviso: "Pasto con arbolado: se aplica la equivalencia operativa confirmada de 3 m/min."
-  }),
-  FO: Object.freeze({
-    valor: "pinar",
-    aviso: "Forestal: por criterio prudente se aplica la equivalencia confirmada de 8 m/min. Ajusta si conoces el combustible real."
-  })
-});
-
 export const CARDINALES = Object.freeze(["N", "NE", "E", "SE", "S", "SO", "O", "NO"]);
 
 export function normalizarGrados(grados) {

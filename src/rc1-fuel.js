@@ -3,7 +3,7 @@
 export const V0_RC1 = Object.freeze({ pastos: 3, quercus: 4, matorral: 6, pinar: 8 });
 const GAP = new Set(['AG', 'CA', 'ED', 'ZU']);
 const MFE_DOMAINS = new Set(['FO', 'MT', 'PR', 'PA']);
-const UNTYPED_POSITIVE = new Set(['FO', 'OV', 'VI', 'FY', 'FS', 'CI']);
+const UNTYPED_POSITIVE = new Set(['FO', 'CF', 'CI', 'CS', 'CV', 'FF', 'FL', 'FS', 'FV', 'FY', 'OC', 'OF', 'OV', 'VF', 'VI', 'VO']);
 const NATURAL = new Set(['Bosque Adehesado', 'Bosque', 'Bosque de Plantación',
   'Herbazal-Pastizal', 'Arbustedos', 'Pastizal-Matorral', 'Matorral con arbolado disperso',
   'Herbazal-Pastizal con dehesa hueca', 'Galerías arbustivas', 'Prados']);
@@ -61,13 +61,20 @@ export function resolverCombustible({ sigpac, mfe = [], combustiblePositivo = fa
   const add = (categoria, uso) => candidates.push({ categoria, v0: V0_RC1[categoria], source: 'SIGPAC',
     feature_id: recintos.find(r => r.uso === uso)?.feature_id ?? null, regla: `sigpac_${uso}`, evidencia: ['uso'] });
   for (const c of codes) {
-    if (c === 'PS' || c === 'PA') add('pastos', c);
+    if (c === 'PS') add('pastos', c);
     if (c === 'PR' || c === 'MT') add('matorral', c);
   }
   const consultarMfe = codes.every(c => MFE_DOMAINS.has(c));
   if (consultarMfe) {
     for (const m of mfes) candidates.push(...candidatosMfe(m));
     if (mfes.length) base.source.push('MFE25');
+  }
+  // PA combina pasto y árboles: sin clase MFE concluyente, pastos=3 sería una falsa certeza.
+  if (codes.includes('PA') && !candidates.some(c => c.source === 'MFE25')) {
+    return { ...base, status: 'untyped', candidates,
+      label: 'pasto con arbolado · combustible no tipificado', v0: 8,
+      conflict: base.conflict || codes.length > 1, fallback: 'untyped_v0_8',
+      rule: 'pa_without_mfe_class_v1', confidence: 'baja' };
   }
   const unique = [...new Map(candidates.map(c => [`${c.categoria}:${c.source}:${c.feature_id}`, c])).values()];
   const categorias = [...new Set(unique.map(c => c.categoria))].sort();

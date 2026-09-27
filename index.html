@@ -239,19 +239,11 @@
             <div class="campo">
               <label for="in-pen">Pendiente media</label>
               <div class="fila-rango sin-elegir" id="wrap-pen">
-                <input type="range" id="in-pen" min="0" max="100" step="1" value="30">
+                <input type="range" id="in-pen" min="-100" max="100" step="1" value="0" aria-describedby="ayuda-pen">
                 <output id="out-pen">sin elegir</output>
               </div>
             </div>
-            <div class="campo">
-              <label for="in-sentido">El fuego avanza por la ladera</label>
-              <select id="in-sentido">
-                <option value="" selected>Selecciona…</option>
-                <option value="subiendo">Subiendo la ladera</option>
-                <option value="llano">En llano</option>
-                <option value="bajando">Bajando la ladera</option>
-              </select>
-            </div>
+            <div class="campo mini-nota" id="ayuda-pen">− descenso · 0 % llano · + ascenso, en dirección del incendio hacia la zona. El sentido se deduce del valor.</div>
           </div>
           <div id="pen-auto" class="auto-card" hidden></div>
         </div>
@@ -303,10 +295,8 @@
                 <option value="pinar">Pinar</option>
               </select>
               <div class="mini-nota">Se aplica de forma uniforme al corredor. La pendiente y el viento pueden seguir automáticos.</div>
-              <button class="btn mini" id="btn-sigpac" type="button" hidden>Consultar uso del terreno (SIGPAC)</button>
             </div>
           </div>
-          <div id="sigpac-card" class="auto-card" hidden></div>
         </div>
 
       </div>
@@ -325,9 +315,9 @@ window.CONFIG_RESOLVER = "https://alerta-fuego-enlaces.marcosalvarez1w.workers.d
 window.CONFIG_RC1_API = "https://alerta-fuego-enlaces.marcosalvarez1w.workers.dev";
 </script>
 <script type="module">
-import * as Core from "./src/core.js";
-import { ejecutarRc1Automatico } from "./src/rc1-run.js?v=prudente-1";
-import { pintarResultadoRc1 } from "./src/rc1-view.js?v=prudente-1";
+import * as Core from "./src/core.js?v=combustible-3";
+import { ejecutarRc1Automatico } from "./src/rc1-run.js?v=combustible-3";
+import { pintarResultadoRc1 } from "./src/rc1-view.js?v=escenarios-2";
 
 "use strict";
 // Modelo, geometría, conversiones y parser: fuente única comprobable en src/core.js.
@@ -448,16 +438,6 @@ const TEXTO_CUADRANTE = {
   }
 };
 
-const USO_SIGPAC_NOMBRE = {
-  TA: "Tierra arable", TH: "Huerta", PS: "Pastizal", PR: "Pasto arbustivo", MT: "Matorral",
-  PA: "Pasto con arbolado", FO: "Forestal", OV: "Olivar", VI: "Viñedo",
-  FY: "Frutal", FS: "Frutos secos", CI: "Cítricos", IV: "Invernadero",
-  ED: "Edificación", CA: "Vial", AG: "Aguas", IM: "Improductivo", ZU: "Zona urbana"
-};
-
-// Correspondencias históricas usadas solo por la tarjeta de sugerencia puntual.
-const SUGERENCIA_COMBUSTIBLE = Core.SUGERENCIA_COMBUSTIBLE_SIGPAC;
-
 const NOMBRE_CUADRANTE = {
   riesgo: "riesgo",
   alerta_derecha: "alerta (lado derecho)",
@@ -498,9 +478,7 @@ const estado = {
   editor: null,
   // Marca si el usuario ha tocado los sliders manuales (sin valor operativo hasta entonces)
   velElegida: false,
-  penElegida: false,
-  sigpac: { cargando: false, datos: null, error: null },
-  combPorSigpac: false
+  penElegida: false
 };
 
 // === CONSULTAS A OPEN-METEO (con caché y control de tiempo) ===
@@ -605,112 +583,6 @@ async function obtenerPendienteCacheada(f, z) {
   };
   cachePendiente.set(clave, d);
   return d;
-}
-
-// SIGPAC: activo. Usa la consulta oficial "recinfobypoint" del Servicio de
-// Consultas SIGPAC (FEGA), confirmada con su documentación. Ver worker.js.
-const SIGPAC_DISPONIBLE = true;
-
-const cacheSigpac = new Map();
-function claveSigpac(p) { return p.lat.toFixed(4) + "," + p.lon.toFixed(4); }
-
-let tokenSigpac = 0;
-
-function invalidarSigpacPorCambioIncendio() {
-  tokenSigpac++;
-  const sg = estado.sigpac;
-  sg.cargando = false;
-  sg.datos = null;
-  sg.error = null;
-  if (estado.combPorSigpac) {
-    document.getElementById("in-comb").value = "";
-    estado.combPorSigpac = false;
-  }
-}
-
-async function consultarSigpac() {
-  const sg = estado.sigpac;
-  if (!estado.fuego || !RESOLVER_URL) return;
-
-  const clave = claveSigpac(estado.fuego);
-  const enCache = cacheSigpac.get(clave);
-  if (enCache) {
-    sg.datos = enCache; sg.error = null; sg.cargando = false;
-    renderSigpac(); return;
-  }
-
-  const token = ++tokenSigpac;
-  sg.cargando = true; sg.error = null; sg.datos = null;
-  renderSigpac();
-  try {
-    const j = await fetchJson(RESOLVER_URL + "/sigpac?lat=" + estado.fuego.lat + "&lon=" + estado.fuego.lon);
-    if (token !== tokenSigpac) return;
-    sg.datos = { uso: Core.normalizarCodigoSigpac(j.uso) };
-    cacheSigpac.set(clave, sg.datos);
-  } catch (err) {
-    if (token !== tokenSigpac) return;
-    sg.error = "No se pudo consultar SIGPAC ahora mismo.";
-  }
-  sg.cargando = false;
-  renderSigpac();
-}
-
-function renderSigpac() {
-  const sg = estado.sigpac;
-  const boton = document.getElementById("btn-sigpac");
-  const card = document.getElementById("sigpac-card");
-
-  boton.hidden = !RESOLVER_URL || !SIGPAC_DISPONIBLE;
-  boton.disabled = !estado.fuego;
-  boton.title = estado.fuego ? "" : "Fija primero el punto del incendio";
-
-  const hayContenido = sg.cargando || sg.error || sg.datos;
-  card.hidden = !hayContenido;
-  if (!hayContenido) return;
-
-  if (sg.cargando) {
-    card.innerHTML = "Consultando uso del suelo en SIGPAC…";
-    return;
-  }
-  if (sg.error) {
-    card.innerHTML = "<span class='err'>" + sg.error + "</span>" +
-      "<div class='mini-nota'>La consulta puntual es orientativa. Puedes usar el modo manual de combustible.</div>" +
-      "<button class='btn mini' id='btn-sigpac-retry' type='button'>Reintentar</button>";
-    document.getElementById("btn-sigpac-retry").addEventListener("click", consultarSigpac);
-    return;
-  }
-
-  const uso = sg.datos.uso;
-  const atribucion = "<div class='mini-nota'>Uso del suelo en el punto del incendio. (Fuente: SIGPAC — FEGA, CC BY 4.0)</div>";
-
-  if (!uso) {
-    card.innerHTML = "No hay recinto SIGPAC en ese punto (por ejemplo, zona urbana o sin cobertura)." + atribucion;
-    return;
-  }
-
-  const nombre = USO_SIGPAC_NOMBRE[uso] || uso;
-  const usoSeguro = Core.escaparHtml(uso);
-  const nombreSeguro = Core.escaparHtml(nombre);
-  const sug = SUGERENCIA_COMBUSTIBLE[uso];
-
-  if (!sug) {
-    card.innerHTML = "Uso del suelo: <b>" + nombreSeguro + " (" + usoSeguro + ")</b>. " +
-      "Sin equivalencia directa en esta consulta puntual. El cálculo por tramos usa los recintos del corredor." + atribucion;
-    return;
-  }
-
-  card.innerHTML = "Uso del suelo: <b>" + nombreSeguro + " (" + usoSeguro + ")</b>. " +
-    "Sugerencia: <b>" + Core.escaparHtml(NOMBRE_COMBUSTIBLE[sug.valor]) + "</b>." +
-    (sug.aviso ? "<div class='mini-nota'>" + Core.escaparHtml(sug.aviso) + "</div>" : "") +
-    atribucion +
-    "<button class='btn mini' id='btn-sigpac-usar' type='button'>Usar sugerencia</button>";
-  document.getElementById("btn-sigpac-usar").addEventListener("click", function () {
-    document.getElementById("in-comb").value = sug.valor;
-    estado.combPorSigpac = true;
-    invalidarResultado();
-    refrescar();
-    mostrarToast("Combustible fijado: " + NOMBRE_COMBUSTIBLE[sug.valor] + " (sugerido por SIGPAC)");
-  });
 }
 
 // === ACTUALIZACIÓN DE DATOS AUTOMÁTICOS (con protección contra respuestas tardías) ===
@@ -880,10 +752,6 @@ let capasCalculo = [];
 
 function alCambiarPunto(tipo) {
   invalidarResultado();
-  if (tipo === "fuego") {
-    invalidarSigpacPorCambioIncendio();
-    renderSigpac();
-  }
   refrescar();
 }
 
@@ -894,10 +762,6 @@ function fijarPunto(tipo, latlng) {
     marcadores[tipo] = L.marker(latlng, { icon: icono(tipo), draggable: true }).addTo(map);
     marcadores[tipo].on("dragstart", () => {
       invalidarResultado();
-      if (tipo === "fuego") {
-        invalidarSigpacPorCambioIncendio();
-        renderSigpac();
-      }
       refrescar();
     });
     marcadores[tipo].on("drag", (e) => {
@@ -1027,8 +891,9 @@ function leerEntradas() {
         fuentePendiente: pa.datos.fuente + ", provisional"
       }
     : {
-        pendientePct: +document.getElementById("in-pen").value,
-        sentidoLadera: document.getElementById("in-sentido").value,
+        pendientePct: Math.abs(+document.getElementById("in-pen").value),
+        sentidoLadera: +document.getElementById("in-pen").value < 0 ? "bajando" :
+          +document.getElementById("in-pen").value > 0 ? "subiendo" : "llano",
         fuentePendiente: "manual"
       };
 
@@ -1041,7 +906,7 @@ function leerEntradas() {
     sentidoLadera: pendiente.sentidoLadera,
     fuentePendiente: pendiente.fuentePendiente,
     tipoCombustible: document.getElementById("in-comb").value,
-    fuenteCombustible: estado.combPorSigpac ? "manual, sugerido por SIGPAC" : "manual"
+    fuenteCombustible: "manual"
   };
 }
 
@@ -1067,9 +932,7 @@ async function calcular() {
   refrescar();
   try {
     const pendienteManual = estado.penAuto.activo ? null :
-      (+document.getElementById("in-pen").value) *
-      (document.getElementById("in-sentido").value === "bajando" ? -1 :
-       document.getElementById("in-sentido").value === "llano" ? 0 : 1);
+      +document.getElementById("in-pen").value;
     const vientoManual = estado.vientoAuto.activo ? null : {
       haciaGrados: Core.resolverDireccionGrados(document.getElementById("in-dir").value),
       velocidadKmh: +document.getElementById("in-vel").value
@@ -1327,8 +1190,7 @@ function motivosBloqueo() {
 
   // Pendiente
   if (!pa.activo) {
-    const sentidoElegido = document.getElementById("in-sentido").value !== "";
-    if (!estado.penElegida || !sentidoElegido) motivos.push("elige la pendiente y el sentido de la ladera");
+    if (!estado.penElegida) motivos.push("elige la pendiente manual");
   }
 
   if (!estado.combAuto && document.getElementById("in-comb").value === "") {
@@ -1401,16 +1263,10 @@ document.getElementById("editor-input").addEventListener("keydown", function (e)
 });
 
 document.getElementById("btn-geo").addEventListener("click", usarMiUbicacion);
-document.getElementById("btn-sigpac").addEventListener("click", consultarSigpac);
-document.getElementById("in-comb").addEventListener("change", function () {
-  estado.combPorSigpac = false;
-});
-
 document.getElementById("btn-borrar").addEventListener("click", function () {
   tokenViento++;
   tokenPen++;
   cancelarTemporizadorCaducidadViento();
-  invalidarSigpacPorCambioIncendio();
   for (const t of ["fuego", "zona"]) {
     if (marcadores[t]) { map.removeLayer(marcadores[t]); marcadores[t] = null; }
     estado[t] = null;
@@ -1419,19 +1275,17 @@ document.getElementById("btn-borrar").addEventListener("click", function () {
   estado.vientoAuto.datos = null; estado.vientoAuto.error = null; estado.vientoAuto.caducado = false; estado.vientoAuto.cargando = false;
   estado.penAuto.datos = null; estado.penAuto.error = null;
   estado.velElegida = false; estado.penElegida = false;
-  estado.sigpac.datos = null; estado.sigpac.error = null; estado.sigpac.cargando = false;
   document.getElementById("wrap-vel").classList.add("sin-elegir");
   document.getElementById("wrap-pen").classList.add("sin-elegir");
   document.getElementById("out-vel").textContent = "sin elegir";
   document.getElementById("out-pen").textContent = "sin elegir";
+  document.getElementById("in-pen").value = "0";
   document.getElementById("in-dir").value = "";
-  document.getElementById("in-sentido").value = "";
   document.getElementById("in-comb").value = "";
   cerrarEditor();
   invalidarResultado();
   renderVientoAuto();
   renderPendienteAuto();
-  renderSigpac();
   refrescar();
 });
 
@@ -1470,10 +1324,10 @@ function marcarPenElegida() {
   if (estado.penElegida) return;
   estado.penElegida = true;
   document.getElementById("wrap-pen").classList.remove("sin-elegir");
-  document.getElementById("out-pen").textContent = document.getElementById("in-pen").value + " %";
+  mostrarPendienteManual();
 }
 
-const IDS_SELECTS = ["in-dir", "in-comb", "in-sentido"];
+const IDS_SELECTS = ["in-dir", "in-comb"];
 for (const idSel of IDS_SELECTS) {
   document.getElementById(idSel).addEventListener("change", function () {
     invalidarResultado(); refrescar();
@@ -1486,17 +1340,21 @@ document.getElementById("in-vel").addEventListener("input", function (e) {
   document.getElementById("out-vel").textContent = e.target.value + " km/h";
   invalidarResultado(); refrescar();
 });
+function mostrarPendienteManual() {
+  const v = +document.getElementById("in-pen").value;
+  document.getElementById("out-pen").textContent =
+    (v > 0 ? "+" : "") + v + " % · " + (v < 0 ? "descenso" : v > 0 ? "ascenso" : "llano");
+}
 document.getElementById("in-pen").addEventListener("pointerdown", marcarPenElegida);
 document.getElementById("in-pen").addEventListener("input", function (e) {
   marcarPenElegida();
-  document.getElementById("out-pen").textContent = e.target.value + " %";
+  mostrarPendienteManual();
   invalidarResultado(); refrescar();
 });
 
 renderVientoAuto();
 renderPendienteAuto();
 renderCombustible();
-renderSigpac();
 document.getElementById("chk-viento-auto").checked = true;
 document.getElementById("chk-pen-auto").checked = true;
 document.getElementById("chk-comb-auto").checked = true;

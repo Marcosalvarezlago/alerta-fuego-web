@@ -13,7 +13,6 @@ import {
   obtenerFactorPendiente,
   parsearUbicacion
 } from "../src/core.js";
-import { SUGERENCIA_COMBUSTIBLE_SIGPAC, V0_COMBUSTIBLE } from "../src/core.js";
 
 test("la dirección automática exacta decide el cuadrante sin cuantizar a cardinal", () => {
   // A 22,4° el rumbo 67,3° aún cae en riesgo (44,9° de diferencia).
@@ -86,20 +85,4 @@ test("los códigos SIGPAC se normalizan y se rechaza texto no confiable", () => 
   assert.equal(normalizarCodigoSigpac(null), null);
   assert.throws(() => normalizarCodigoSigpac("<img src=x onerror=alert(1)>"), /no válido/);
   assert.equal(escaparHtml("<b>&'\""), "&lt;b&gt;&amp;&#039;&quot;");
-});
-
-test("las equivalencias SIGPAC confirmadas conservan su combustible y V0", () => {
-  const esperadas = {
-    PS: ["pastos_bajos", 3],
-    PR: ["matorral_mediterraneo", 6],
-    MT: ["matorral_mediterraneo", 6],
-    PA: ["pastos_bajos", 3],
-    FO: ["pinar", 8]
-  };
-
-  for (const [codigo, [combustible, v0]] of Object.entries(esperadas)) {
-    assert.equal(SUGERENCIA_COMBUSTIBLE_SIGPAC[codigo].valor, combustible, codigo);
-    assert.equal(V0_COMBUSTIBLE[combustible], v0, `${codigo} → V0`);
-  }
-  assert.equal(SUGERENCIA_COMBUSTIBLE_SIGPAC.TA, undefined);
 });

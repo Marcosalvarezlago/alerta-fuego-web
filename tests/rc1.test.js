@@ -58,6 +58,16 @@ test('23 casos ejecutables del preflight: clases, suma, fronteras y NoData', () 
   assert.deepEqual(fuels.map(f => run([30], [f], [0, 0]).scenarios[0].eta_min), [10, 7.5, 5, 3.75]);
   assert.equal(run([30, 30], [fuels[0], fuels[3]], [0, 0, 0]).scenarios[0].eta_min, 13.75);
   assert.equal(resolverCombustible({ sigpac: q, mfe: mfeQ }).v0, 4);
+  const paSinMfe = resolverCombustible({ sigpac: { uso: 'PA' } });
+  assert.equal(paSinMfe.status, 'untyped');
+  assert.equal(paSinMfe.v0, 8);
+  assert.match(paSinMfe.label, /no tipificado/);
+  assert.equal(resolverCombustible({ sigpac: { uso: 'PA' }, mfe: mfeQ }).v0, 4);
+  for (const uso of ['CF', 'FL', 'VO']) {
+    const cultivo = resolverCombustible({ sigpac: { uso }, combustiblePositivo: true });
+    assert.equal(cultivo.status, 'untyped', uso);
+    assert.equal(cultivo.v0, 8, uso);
+  }
   assert.equal(resolverCombustible({ sigpac: { uso: 'TA' }, mfe: mfeP }).status, 'nodata');
   assert.equal(resolverCombustible({ sigpac: { uso: 'AG' }, mfe: mfeP }).status, 'gap');
   const mixed = resolverCombustible({ sigpac: q, mfe: mfeP });

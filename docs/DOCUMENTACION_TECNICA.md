@@ -128,7 +128,9 @@ Limitaciones:
 
 Por estas razones, la pendiente automática es **provisional**, aunque la fuente de elevación sea oficial.
 
-### Combustible — SIGPAC
+### Combustible — SIGPAC en la interfaz global histórica
+
+Este apartado conserva el comportamiento anterior a RC1 para trazabilidad. La política activa está en [RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md](RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
 
 SIGPAC aporta una **ocupación o uso del suelo en un punto**. No identifica con fiabilidad suficiente la especie, la estructura, la carga, la continuidad ni la humedad real del combustible forestal. Por ello:
 
@@ -137,7 +139,7 @@ SIGPAC aporta una **ocupación o uso del suelo en un punto**. No identifica con 
 - Un uso sin equivalencia confirmada debe quedar en selección manual.
 - Al mover el punto del incendio debe repetirse la consulta y no reutilizarse una sugerencia anterior como si perteneciera al punto nuevo.
 
-La conversación de revisión con José dejó acordado el siguiente criterio, reflejado en la constante `SUGERENCIA_COMBUSTIBLE`:
+La interfaz global histórica utilizaba el siguiente criterio de sugerencia puntual, retirado de RC1:
 
 | Ocupación SIGPAC | V0 acordada |
 |---|---:|
@@ -249,7 +251,7 @@ Pendiente antes de presentar la herramienta como lista para distribución:
 
 `index.html` conserva el mapa, marcadores, editor de coordenadas, geolocalización, enlaces de Maps, cuadrantes y protocolos. Invoca `ejecutarRc1Automatico` al calcular. Pendiente, viento y combustible tienen cada uno modo automático o manual. El combustible manual aplica una clase homogénea al corredor y evita la consulta SIGPAC. `scripts/serve_rc1_local.py` sirve la web en `127.0.0.1`, consulta recintos SIGPAC OGC, agrupa los usos por parcela, incorpora MFE25 local cuando está disponible y obtiene el perfil MDT05 IGN por WCS. En GitHub Pages, `infra/worker.js` proporciona las rutas SIGPAC y MDT05 sin requerir ficheros ni configuración de la persona usuaria; el MFE25 local no se distribuye. `src/rc1-overlay.js` corta la línea geodésica por fronteras y `src/rc1-geometry.js` subdivide cada intervalo temático en tramos ≤30 m. Esa longitud es intervalo de integración, no precisión temática.
 
-`src/rc1-fuel.js` aplica SIGPAC→dominio y MFE25→candidatos solo en FO/PR/MT/PA. PS aporta pastos=3; PR/MT matorral=6; PA pastos=3. P1/Q1/M1/PI1 usan campos MFE reales. Candidatos múltiples: max(V0) para cálculo con etiqueta ambigua. FO sin clase MFE25 concluyente y cultivos permanentes OV/VI/FY/FS/CI usan provisionalmente V0=8, como combustible positivo no tipificado. La clasificación conserva NoData para TA/TH, usos no clasificados y fallos; el motor calcula una ETA provisional con V0=8 en esos tramos, sin afirmar que sean pinar ni que 8 sea una cota física. AG/CA/ED/ZU inequívocos son discontinuidades con t_gap=0 provisional; IM/EP/ZC/ZV no lo son. El selector manual permite pastos, quercus, matorral o pinar uniformes. [Política provisional](RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
+`src/rc1-fuel.js` aplica SIGPAC→dominio y MFE25→candidatos solo en FO/PR/MT/PA. PS aporta pastos=3; PR/MT matorral=6; PA solo se tipifica con MFE25 concluyente y, en otro caso, queda no tipificado con V0=8 provisional. P1/Q1/M1/PI1 usan campos MFE reales. Candidatos múltiples: max(V0) para cálculo con etiqueta ambigua. FO sin clase MFE25 concluyente, así como cultivos permanentes y asociaciones CF/CI/CS/CV/FF/FL/FS/FV/FY/OC/OF/OV/VF/VI/VO usan provisionalmente V0=8, como combustible positivo no tipificado. La clasificación conserva NoData para TA/TH, usos no clasificados y fallos; el motor calcula una ETA provisional con V0=8 en esos tramos, sin afirmar que sean pinar ni que 8 sea una cota física. AG/CA/ED/ZU inequívocos son discontinuidades con t_gap=0 provisional; IM/EP/ZC/ZV no lo son. El selector manual permite pastos, quercus, matorral o pinar uniformes, sin sugerencia puntual basada en el foco. La pendiente manual es un valor firmado de −100 a +100 %, con 0 llano, signo negativo para descenso y positivo para ascenso. [Política provisional](RC1_POLITICA_COMBUSTIBLE_PROVISIONAL.md).
 
 `scripts/serve_rc1_local.py` expone `GET /api/rc1/asset` y `POST /api/rc1/perfil` en la misma URL local. `infra/worker.js` expone las mismas rutas públicas y `POST /api/rc1/usos`, que consulta hasta 20 parcelas por petición. Cada petición interna de asset sigue limitada a 5 km y cada petición de perfil a 256 puntos; el cliente divide el corredor elegido en consultas de hasta 4 km y el perfil en lotes de hasta 128 puntos solapados. La interfaz ya no impone un máximo de 5 km al recorrido completo. El cliente limita el tiempo de cada consulta y puede usar Open-Meteo Elevation/GLO-90 como respaldo visible. El servidor local requiere Python con GDAL; MFE25 se lee de la ruta configurada sin publicar el fichero.
 

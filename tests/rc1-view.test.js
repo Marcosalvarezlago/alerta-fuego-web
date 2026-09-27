@@ -37,6 +37,9 @@ test('la vista muestra ETA provisional y evita vigilancia verde con datos ausent
     assert.match(html, /ETA PROVISIONAL/);
     assert.match(html, /V0 = 8, FV = 3 o FP = 2/);
     assert.match(html, /SIGPAC parcial/);
+    assert.match(html, /Comparación de viento por horas/);
+    assert.match(html, /Viento de referencia/);
+    assert.doesNotMatch(html, /2026-09-27T10:00/);
     assert.doesNotMatch(html, /VIGILANCIA PREVENTIVA/);
   } finally {
     globalThis.document = previous;

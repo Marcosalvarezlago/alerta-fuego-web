@@ -14,8 +14,14 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, NOMBRE_CUADRANTE,
   const clave = provisional && temporal === 'vigilancia_preventiva' ? 'provisional' :
     exposicion === 'sin_riesgo' ? 'vigilancia_preventiva' : temporal;
   const protocolo = PROTOCOLOS[clave];
+  const horaLocal = hora => {
+    const fecha = new Date(hora + 'Z');
+    return Number.isFinite(fecha.getTime()) ?
+      new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit',
+        hour: '2-digit', minute: '2-digit' }).format(fecha) : 'hora no disponible';
+  };
   const escenarios = r.scenarios.map(s =>
-    `<div class="escenario"><small>${esc(s.scenario)} · ${esc(s.horaUtc || 'sin hora')}</small>` +
+    `<div class="escenario"><small>${s.scenario === 't0' ? 'Viento de referencia' : 'Viento ' + esc(s.scenario).replace('h', ' h')} · ${esc(horaLocal(s.horaUtc))}</small>` +
     `<b>${Core.formatearTiempo(s.eta_min)}${s.status === 'provisional' ? ' · prudente' : ''}</b>` +
     `<small>${s.exposure ? esc(NOMBRE_CUADRANTE[s.exposure.cuadrante ?? s.exposure] ||
       s.exposure.cuadrante || s.exposure) : 'viento sin dirección'}</small></div>`
@@ -58,6 +64,7 @@ export function pintarResultadoRc1(r, { Core, TEXTO_CUADRANTE, NOMBRE_CUADRANTE,
     `<div class="datos-usados"><b>Datos usados:</b> ${fuenteCombustible} · ` +
     `${esc(r.profile_source)} · ${esc(r.source_versions.wind_source)}. ${detalle}` +
     (fuentes.length ? `<div class="mini-nota">Fuentes: ${fuentes.join(', ')}.</div>` : '') + '</div>' +
+    `<div class="mini-nota" style="margin-bottom:8px">Comparación de viento por horas (hora local): cada tarjeta calcula la ETA completa con el viento previsto de esa hora, mantenido constante en todo el recorrido. No indica dónde estará el fuego a esa hora.</div>` +
     `<div class="escenarios">${escenarios}</div>` +
     `<details class="bloque" open><summary>${protocolo.encabezado}: ${protocolo.titulo}</summary>` +
     `<ul>${acciones}</ul></details>` +
